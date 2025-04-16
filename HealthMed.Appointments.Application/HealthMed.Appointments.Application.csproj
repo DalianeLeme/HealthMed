@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HealthMed.Appointments.Domain\HealthMed.Appointments.Domain.csproj" />
+    <ProjectReference Include="..\HealthMed.Appointments.Infrastructure\HealthMed.Appointments.Infrastructure.csproj" />
+    <ProjectReference Include="..\HealthMed.Auth.Domain\HealthMed.Auth.Domain.csproj" />
+    <ProjectReference Include="..\HealthMed.Schedule.Application\HealthMed.Schedule.Application.csproj" />
+    <ProjectReference Include="..\HealthMed.Shared\HealthMed.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

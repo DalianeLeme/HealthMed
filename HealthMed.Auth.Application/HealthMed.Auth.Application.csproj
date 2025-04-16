@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HealthMed.Appointments.Domain\HealthMed.Appointments.Domain.csproj" />
+    <ProjectReference Include="..\HealthMed.Auth.Domain\HealthMed.Auth.Domain.csproj" />
+    <ProjectReference Include="..\HealthMed.Shared\HealthMed.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

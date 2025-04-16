@@ -1,6 +1,0 @@
-@HealthMed.Appointments_HostAddress = http://localhost:5094
-
-GET {{HealthMed.Appointments_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

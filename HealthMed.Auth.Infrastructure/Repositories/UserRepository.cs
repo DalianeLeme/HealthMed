@@ -16,38 +16,51 @@ namespace HealthMed.Auth.Infrastructure.Repositories
 
         public async Task<User?> FindByCRMAsync(string crm)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.CRM == crm);
+            // busca o profile e retorna o User associado
+            var profile = await _context.DoctorProfiles
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.CRM == crm);
+
+            return profile?.User;
         }
 
         public async Task<User?> FindByCPFAsync(string cpf)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.CPF == cpf);
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.CPF == cpf);
         }
 
         public async Task<User?> FindByEmailAsync(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == email);
         }
 
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
-            return await _context.Users.FirstOrDefaultAsync(u =>
-                u.Email == identifier || u.CPF == identifier || u.CRM == identifier
-            );
+            // inclui profile para poder filtrar por CRM também
+            return await _context.Users
+                .Include(u => u.Profile)
+                .FirstOrDefaultAsync(u =>
+                       u.Email == identifier
+                    || u.CPF == identifier
+                    || (u.Profile != null && u.Profile.CRM == identifier)
+                );
         }
 
         public async Task AddAsync(User user)
         {
-            await _context.Users.AddAsync(user);
+            _context.Users.Add(user);
             await _context.SaveChangesAsync();
         }
 
         public async Task<List<User>> GetAllDoctorsAsync()
         {
+            // inclui profile para retorno completo
             return await _context.Users
+                .Include(u => u.Profile)
                 .Where(u => u.Role == "Doctor")
                 .ToListAsync();
         }
-
     }
 }

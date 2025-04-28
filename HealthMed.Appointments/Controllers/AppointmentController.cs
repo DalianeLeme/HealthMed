@@ -1,12 +1,11 @@
-﻿using HealthMed.Appointments.Application.Models;
-using HealthMed.Appointments.Application.Services;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
-using HealthMed.Shared.DTOs;
-using HealthMed.Appointments.Domain.Entities;
+﻿using HealthMed.Appointments.Application.Clients;
+using HealthMed.Appointments.Application.Interfaces;
+using HealthMed.Appointments.Application.Models;
 using HealthMed.Appointments.Domain.Enums;
-using HealthMed.Appointments.Application.Clients;
+using HealthMed.Shared.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace HealthMed.Appointments.API.Controllers
 {
@@ -14,9 +13,9 @@ namespace HealthMed.Appointments.API.Controllers
     [Route("api/[controller]")]
     public class AppointmentController : ControllerBase
     {
-        private readonly AppointmentService _appointmentService;
+        private readonly IAppointmentService _appointmentService;
 
-        public AppointmentController(AppointmentService appointmentService)
+        public AppointmentController(IAppointmentService appointmentService)
         {
             _appointmentService = appointmentService;
         }
@@ -25,16 +24,14 @@ namespace HealthMed.Appointments.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] ScheduleRequest request)
         {
-            var patientIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (patientIdClaim == null) return Unauthorized();
+            var patientId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(patientId, out var pid))
+                return Unauthorized();
 
-            var success = await _appointmentService.ScheduleAppointmentAsync(
-                request.DoctorId,
-                Guid.Parse(patientIdClaim),
-                request.ScheduledTime
-            );
-
-            return success ? Ok("Consulta agendada.") : Conflict("Horário indisponível.");
+            var ok = await _appointmentService.ScheduleAppointmentAsync(request.SlotId, pid);
+            return ok
+                ? Ok("Consulta agendada.")
+                : Conflict("Horário indisponível ou já agendado.");
         }
 
         [Authorize(Roles = "Patient")]
@@ -42,45 +39,96 @@ namespace HealthMed.Appointments.API.Controllers
         public async Task<IActionResult> GetAvailableSlots(Guid doctorId)
         {
             var slots = await _appointmentService.GetAvailableSlotsAsync(doctorId);
-            return Ok(slots);
+            var result = slots
+                .Select(s => new AvailableSlotDto
+                {
+                    Id = s.Id,
+                    StartTime = s.StartTime,
+                    EndTime = s.EndTime
+                })
+                .ToList();
+
+            return Ok(result);
         }
 
         [Authorize(Roles = "Patient")]
         [HttpGet("patient")]
-        public async Task<IActionResult> GetByPatient()
+        public async Task<IActionResult> GetByPatient([FromServices] AuthClient authClient)
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userId == null) return Unauthorized();
-
-            var appointments = await _appointmentService.GetAppointmentsByPatientAsync(Guid.Parse(userId));
-            return Ok(appointments);
-        }
-
-        [Authorize(Roles = "Doctor,Patient")]
-        [HttpPut("{id}/status")]
-        public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] AppointmentStatus newStatus)
-        {
-            var doctorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (doctorId == null)
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
                 return Unauthorized();
 
-            var result = await _appointmentService.UpdateAppointmentStatusAsync(
-                id, newStatus, Guid.Parse(doctorId)
-            );
+            // 1) Consulta as consultas agendadas
+            var appointments = await _appointmentService
+                .GetAppointmentsByPatientAsync(Guid.Parse(userId));
 
-            return result ? Ok("Status atualizado com sucesso.") : Forbid("Você só pode alterar suas próprias consultas.");
+            // 2) Busca todos os médicos (com Specialty e ConsultationValor)
+            var doctors = await authClient.GetAllDoctorsAsync();
+            var doctorMap = doctors.ToDictionary(d => d.Id);
+
+            // 3) Projeta para o DTO final
+            var result = appointments.Select(a =>
+            {
+                var doc = doctorMap[a.DoctorId];
+
+                return new PatientAppointmentDto
+                {
+                    AppointmentId = a.Id,
+                    SlotId = a.SlotId,
+                    DoctorId = a.DoctorId,
+                    ScheduledTime = a.ScheduledTime,
+                    EndTime = a.EndTime,
+                    Status = a.Status.ToString(),
+                    Specialty = doc.Specialty,
+                    ConsultationValor = doc.ConsultationValor ?? 0m
+                };
+            }).ToList();
+
+            return Ok(result);
         }
 
+        [Authorize(Roles = "Doctor")]
+        [HttpPut("{id}/status")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UpdateStatus(
+            Guid id,
+            [FromQuery] StatusUpdateAction action)
+        {
+            var doctorIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(doctorIdClaim, out var doctorId))
+                return Unauthorized();
+
+            var newStatus = action == StatusUpdateAction.Accepted
+                ? AppointmentStatus.Accepted
+                : AppointmentStatus.Rejected;
+
+            var result = await _appointmentService
+                .UpdateAppointmentStatusAsync(id, newStatus, doctorId);
+
+            return result switch
+            {
+                UpdateStatusResult.NotFound => NotFound("Consulta não encontrada."),
+                UpdateStatusResult.Forbidden => Forbid("Você só pode alterar suas próprias consultas."),
+                UpdateStatusResult.Success => Ok("Status atualizado com sucesso."),
+                _ => StatusCode(500, "Erro inesperado.")
+            };
+        }
 
         [Authorize(Roles = "Patient")]
         [HttpDelete("cancel/{id}")]
-        public async Task<IActionResult> Cancel(Guid id)
+        public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAppointmentRequest request)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userId == null) return Unauthorized();
+            if (!Guid.TryParse(userId, out var patientId))
+                return Unauthorized();
 
-            var result = await _appointmentService.CancelAppointmentAsync(id, Guid.Parse(userId));
-            return result ? Ok("Consulta cancelada.") : Forbid("Você só pode cancelar suas próprias consultas.");
+            var success = await _appointmentService.CancelAppointmentAsync(id, patientId, request.Justification.Trim());
+            return success
+                ? Ok("Consulta cancelada.")
+                : Conflict("Não foi possível cancelar: consulta não encontrada, já cancelada ou recusada.");
         }
 
         [Authorize(Roles = "Patient")]
@@ -91,7 +139,7 @@ namespace HealthMed.Appointments.API.Controllers
             if (patientId == null) return Unauthorized();
 
             var success = await _appointmentService.RescheduleAppointmentAsync(
-                request.AppointmentId, request.NewTime, Guid.Parse(patientId)
+                request.AppointmentId, request.NewSlotId, Guid.Parse(patientId)
             );
 
             return success ? Ok("Consulta remarcada.") : Conflict("Horário não disponível ou consulta não encontrada.");
@@ -99,10 +147,37 @@ namespace HealthMed.Appointments.API.Controllers
 
         [Authorize(Roles = "Patient")]
         [HttpGet("doctors")]
-        public async Task<IActionResult> GetDoctors([FromServices] AuthClient authClient)
+        public async Task<IActionResult> GetDoctors(
+                [FromServices] AuthClient authClient,
+                [FromQuery] string? specialty)
         {
-            var doctors = await authClient.GetAllDoctorsAsync();
-            return Ok(doctors);
+                var doctors = await authClient.GetAllDoctorsAsync(specialty);
+                return Ok(doctors);
+        }
+
+        [Authorize(Roles = "Doctor")]
+        [HttpGet("doctorConsultations")]
+        public async Task<IActionResult> GetDoctorConsultations()
+        {
+            var doctorIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(doctorIdClaim, out var doctorId))
+                return Unauthorized();
+
+            var appointments = await _appointmentService.GetAppointmentsByDoctorAsync(doctorId);
+
+            var result = appointments
+                .Select(a => new DoctorAppointmentDto
+                {
+                    AppointmentId = a.Id,
+                    SlotId = a.SlotId,
+                    PatientId = a.PatientId,
+                    ScheduledTime = a.ScheduledTime,
+                    EndTime = a.EndTime,
+                    Status = a.Status.ToString()   
+                })
+                .ToList();
+
+            return Ok(result);
         }
     }
 }

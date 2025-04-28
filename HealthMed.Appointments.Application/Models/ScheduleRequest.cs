@@ -1,5 +1,5 @@
-﻿public class ScheduleRequest
-{
-    public Guid DoctorId { get; set; }
-    public DateTime ScheduledTime { get; set; }
+﻿// HealthMed.Appointments.Application/Models/ScheduleRequest.cs
+public class ScheduleRequest
+{   
+    public Guid SlotId { get; set; }
 }

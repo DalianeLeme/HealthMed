@@ -1,60 +1,93 @@
-﻿using HealthMed.Schedule.Application.Models;
-using HealthMed.Schedule.Application.Services;
+﻿using System;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using HealthMed.Schedule.Application.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
-using System.Text.Json;
 
 namespace HealthMed.Schedule.Infrastructure.Messaging
 {
     public class GetAvailableSlotsConsumer : BackgroundService
     {
-        private readonly IModel _channel;
-        private readonly AvailableSlotService _service;
+        private const string QueueName = "agenda.request";
 
-        public GetAvailableSlotsConsumer(IModel channel, AvailableSlotService service)
+        private readonly IModel _channel;
+        private readonly IServiceScopeFactory _scopeFactory;
+
+        public GetAvailableSlotsConsumer(IConnection connection, IServiceScopeFactory scopeFactory)
         {
-            _channel = channel;
-            _service = service;
+            _scopeFactory = scopeFactory;
+            _channel = connection.CreateModel();
+
+            // 1) declara fila RPC como durável
+            _channel.QueueDeclare(
+                queue: QueueName,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null
+            );
+
+            // 2) QoS para 1 mensagem por vez
+            _channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _channel.QueueDeclare(queue: "agenda.request",
-                                 durable: false,
-                                 exclusive: false,
-                                 autoDelete: false,
-                                 arguments: null);
-
             var consumer = new EventingBasicConsumer(_channel);
             consumer.Received += async (model, ea) =>
             {
+                var props = ea.BasicProperties;
+                var replyTo = props.ReplyTo;
+                var corrId = props.CorrelationId;
                 var body = ea.Body.ToArray();
-                var doctorIdStr = Encoding.UTF8.GetString(body);
+                var idStr = Encoding.UTF8.GetString(body);
 
-                if (Guid.TryParse(doctorIdStr, out var doctorId))
+                try
                 {
-                    var slots = await _service.GetByDoctorAsync(doctorId);
-                    var response = JsonSerializer.Serialize(slots);
+                    if (!string.IsNullOrEmpty(replyTo)
+                     && !string.IsNullOrEmpty(corrId)
+                     && Guid.TryParse(idStr, out var doctorId))
+                    {
+                        // 3) obtém os slots dentro de um escopo
+                        using var scope = _scopeFactory.CreateScope();
+                        var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
+                        var slots = await svc.GetByDoctorAsync(doctorId);
 
-                    var props = ea.BasicProperties;
-                    var replyProps = _channel.CreateBasicProperties();
-                    replyProps.CorrelationId = props.CorrelationId;
+                        // 4) serializa e envia resposta
+                        var respBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(slots));
+                        var replyProps = _channel.CreateBasicProperties();
+                        replyProps.CorrelationId = corrId;
 
-                    var responseBytes = Encoding.UTF8.GetBytes(response);
-                    _channel.BasicPublish(exchange: "",
-                                          routingKey: props.ReplyTo,
-                                          basicProperties: replyProps,
-                                          body: responseBytes);
+                        _channel.BasicPublish(
+                            exchange: "",
+                            routingKey: replyTo,
+                            basicProperties: replyProps,
+                            body: respBytes
+                        );
+                    }
                 }
-
-                _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[Schedule] erro ao processar RPC de agenda: {ex}");
+                    // não reenfileirar, afinal é RPC
+                }
+                finally
+                {
+                    // 5) ack sempre
+                    _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                }
             };
 
-            _channel.BasicConsume(queue: "agenda.request",
-                                  autoAck: false,
-                                  consumer: consumer);
+            _channel.BasicConsume(
+                queue: QueueName,
+                autoAck: false,
+                consumer: consumer
+            );
 
             return Task.CompletedTask;
         }

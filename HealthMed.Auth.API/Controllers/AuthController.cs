@@ -1,5 +1,6 @@
 ﻿using HealthMed.Auth.Application.Models;
 using HealthMed.Auth.Application.Services;
+using HealthMed.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,22 +21,33 @@ namespace HealthMed.Auth.API.Controllers
 
         [AllowAnonymous]
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        public async Task<IActionResult> Register([FromQuery] UserRole role, [FromBody] RegisterRequest request)
         {
             var success = await _authService.RegisterUserAsync(
-                request.Name, request.Email, request.Password, request.Role, request.CRM, request.CPF
+                request.Name,
+                request.Email,
+                request.Password,
+                role.ToString(),            
+                request.CRM,
+                request.Specialty,
+                request.ConsultationValor,
+                request.CPF
             );
 
-            if (!success) return BadRequest("Usuário já existe.");
+            if (!success)
+                return BadRequest("Usuário já existe ou falta info para médico.");
+
             return Ok("Usuário registrado com sucesso.");
         }
+
 
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var user = await _authService.AuthenticateUserAsync(request.Identifier, request.Password);
-            if (user == null) return Unauthorized("Credenciais inválidas.");
+            if (user == null)
+                return Unauthorized("Credenciais inválidas.");
 
             var token = _jwtService.GenerateToken(user);
             return Ok(new
@@ -47,18 +59,24 @@ namespace HealthMed.Auth.API.Controllers
                     user.Name,
                     user.Email,
                     user.Role,
-                    user.CRM,
-                    user.CPF
+                    user.CPF,
+                    // se for médico, pega do profile:
+                    CRM = user.Profile?.CRM,
+                    Specialty = user.Profile?.Specialty,
+                    ConsultationFee = user.Profile?.ConsultationValor
                 }
             });
         }
 
+
         [Authorize(Roles = "Patient")]
         [HttpGet("doctors")]
-        public async Task<IActionResult> GetDoctors()
+        public async Task<IActionResult> GetDoctors(
+                   [FromServices] AuthService authService,
+                   [FromQuery] string? specialty)
         {
-            var result = await _authService.GetAllDoctorsAsync();
-            return Ok(result);
+            var doctors = await authService.GetAllDoctorsAsync(specialty);
+            return Ok(doctors);
         }
 
     }

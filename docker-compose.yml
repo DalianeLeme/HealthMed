@@ -9,21 +9,15 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-    # volumes:
-     # - rabbitmq_data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "status"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
     environment:
-      SA_PASSWORD: "NovaSenhaForte123"
       ACCEPT_EULA: "Y"
+      SA_PASSWORD: "NovaSenhaForte123"
     ports:
       - "1433:1433"
     volumes:
@@ -34,8 +28,20 @@ services:
     build:
       context: .
       dockerfile: HealthMed.Auth.API/Dockerfile
+    container_name: auth.api
     ports:
       - "5000:80"
+    environment:
+      ConnectionStrings__DefaultConnection: >
+        Server=sqlserver,1433;
+        Database=HealthMedDb;
+        User Id=sa;
+        Password=NovaSenhaForte123;
+        TrustServerCertificate=True
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: guest
     depends_on:
       - rabbitmq
       - sqlserver
@@ -44,35 +50,69 @@ services:
     build:
       context: .
       dockerfile: HealthMed.Appointments/Dockerfile
+    container_name: appointments.api
     ports:
       - "5001:80"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      sqlserver:
-        condition: service_started
     environment:
+      ConnectionStrings__DefaultConnection: >
+        Server=sqlserver,1433;
+        Database=HealthMedDb;
+        User Id=sa;
+        Password=NovaSenhaForte123;
+        TrustServerCertificate=True
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Port: 5672
       RabbitMQ__Username: guest
       RabbitMQ__Password: guest
+      AuthApi__BaseUrl:    "http://auth.api:80"
+      ScheduleApi__BaseUrl: "http://schedule.api:80"
+    depends_on:
+      - rabbitmq
+      - sqlserver
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for SQL Server on sqlserver:1433..."
+        until echo > /dev/tcp/sqlserver/1433; do sleep 2; done
+        echo "SQL Server is up"
+        echo "Waiting for RabbitMQ on rabbitmq:5672..."
+        until echo > /dev/tcp/rabbitmq/5672; do sleep 2; done
+        echo "RabbitMQ is up"
+        exec dotnet HealthMed.Appointments.API.dll
 
   schedule.api:
     build:
       context: .
       dockerfile: HealthMed.Schedule.API/Dockerfile
+    container_name: schedule.api
     ports:
       - "5002:80"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      sqlserver:
-        condition: service_started
     environment:
+      ConnectionStrings__DefaultConnection: >
+        Server=sqlserver,1433;
+        Database=HealthMedDb;
+        User Id=sa;
+        Password=NovaSenhaForte123;
+        TrustServerCertificate=True
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Port: 5672
       RabbitMQ__Username: guest
       RabbitMQ__Password: guest
+    depends_on:
+      - rabbitmq
+      - sqlserver
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for SQL Server on sqlserver:1433..."
+        until echo > /dev/tcp/sqlserver/1433; do sleep 2; done
+        echo "SQL Server is up"
+        echo "Waiting for RabbitMQ on rabbitmq:5672..."
+        until echo > /dev/tcp/rabbitmq/5672; do sleep 2; done
+        echo "RabbitMQ is up"
+        exec dotnet HealthMed.Schedule.API.dll
 
 volumes:
   sqlserver_data:

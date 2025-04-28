@@ -46,5 +46,13 @@ namespace HealthMed.Appointments.Infrastructure.Repositories
         {
             return await _context.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
         }
+
+        public Task<bool> ExistsByDoctorAndTimeAsync(Guid doctorId, DateTime scheduledTime)
+            => _context.Appointments
+                  .AsNoTracking()
+                  .AnyAsync(a =>
+                      a.DoctorId == doctorId &&
+                      a.ScheduledTime == scheduledTime
+                  );
     }
 }

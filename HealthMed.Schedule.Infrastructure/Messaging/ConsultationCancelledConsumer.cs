@@ -1,48 +1,71 @@
-﻿using Microsoft.Extensions.Hosting;
-using RabbitMQ.Client.Events;
-using RabbitMQ.Client;
-using System.Text;
-using Newtonsoft.Json;
-using HealthMed.Shared.Messages;
+﻿using HealthMed.Schedule.Application.Interfaces;
+using HealthMed.Schedule.Domain.Entities;
+using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
-using HealthMed.Schedule.Application.Services;
+using Microsoft.Extensions.Hosting;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System.Text;
+using System.Text.Json;
 
-public class ConsultationCancelledConsumer : BackgroundService
+namespace HealthMed.Schedule.Infrastructure.Messaging
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly RabbitMQ.Client.IModel _channel;
-
-    public ConsultationCancelledConsumer(IServiceProvider serviceProvider, RabbitMQ.Client.IModel channel)
+    public class ConsultationCancelledConsumer : BackgroundService
     {
-        _serviceProvider = serviceProvider;
-        _channel = channel;
+        private const string ExchangeName = nameof(ConsultationCancelled);
+        private const string QueueName = nameof(ConsultationCancelled);
 
-        _channel.ExchangeDeclare("consultations.cancelled", ExchangeType.Fanout);
-        _channel.QueueDeclare("schedule_cancelled", durable: true, exclusive: false, autoDelete: false);
-        _channel.QueueBind("schedule_cancelled", "consultations.cancelled", "");
-    }
+        private readonly IModel _channel;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var consumer = new EventingBasicConsumer(_channel);
-        consumer.Received += async (sender, args) =>
+        public ConsultationCancelledConsumer(IConnection connection, IServiceScopeFactory scopeFactory)
         {
-            var message = Encoding.UTF8.GetString(args.Body.ToArray());
-            var data = JsonConvert.DeserializeObject<ConsultationCancelledMessage>(message);
+            _scopeFactory = scopeFactory;
+            _channel = connection.CreateModel();
 
-            using var scope = _serviceProvider.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<AvailableSlotService>();
+            _channel.ExchangeDeclare(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true);
+            _channel.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
+            _channel.QueueBind(queue: QueueName, exchange: ExchangeName, routingKey: "");
+        }
 
-            await service.AddAsync(new HealthMed.Schedule.Domain.Entities.AvailableSlot
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            var consumer = new EventingBasicConsumer(_channel);
+            consumer.Received += async (_, ea) =>
             {
-                Id = Guid.NewGuid(),
-                DoctorId = data.DoctorId,
-                StartTime = data.ScheduledTime,
-                EndTime = data.ScheduledTime.AddMinutes(30) // ou tempo da consulta
-            });
-        };
+                try
+                {
+                    var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+                    var evt = JsonSerializer.Deserialize<ConsultationCancelled>(json)
+                               ?? throw new InvalidOperationException("Payload vazio em ConsultationCancelled");
 
-        _channel.BasicConsume("schedule_cancelled", autoAck: true, consumer: consumer);
-        return Task.CompletedTask;
+                    using var scope = _scopeFactory.CreateScope();
+                    var service = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
+
+                    // usa o mesmo Id e o mesmo EndTime do slot original
+                    // em vez de evt.EndTime use:
+                    var endTime = evt.ScheduledTime.AddMinutes(30);
+
+                    var slot = new AvailableSlot(
+                        Guid.NewGuid(),          // ou evt.SlotId, se você passar o SlotId no evento
+                        evt.DoctorId,
+                        evt.ScheduledTime,
+                        evt.EndTime              // usa o EndTime vindo do evento
+                    );
+
+
+                    await service.AddAsync(slot);
+
+                    _channel.BasicAck(ea.DeliveryTag, multiple: false);
+                }
+                catch
+                {
+                    _channel.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+                }
+            };
+
+            _channel.BasicConsume(queue: QueueName, autoAck: false, consumer: consumer);
+            return Task.CompletedTask;
+        }
     }
 }

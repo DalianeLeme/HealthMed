@@ -9,5 +9,6 @@ namespace HealthMed.Appointments.Domain.Interfaces
         Task AddAppointment(Appointment appointment);
         Task UpdateAppointment(Appointment appointment);
         Task<Appointment?> FindByIdAsync(Guid appointmentId);
+        Task<bool> ExistsByDoctorAndTimeAsync(Guid doctorId, DateTime scheduledTime);
     }
 }

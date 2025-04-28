@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HealthMed.Schedule.Application\HealthMed.Schedule.Application.csproj" />
-    <ProjectReference Include="..\HealthMed.Schedule.Domain\HealthMed.Schedule.Domain.csproj" />
     <ProjectReference Include="..\HealthMed.Schedule.Infrastructure\HealthMed.Schedule.Infrastructure.csproj" />
   </ItemGroup>
 

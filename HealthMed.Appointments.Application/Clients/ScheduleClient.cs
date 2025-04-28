@@ -1,69 +1,68 @@
-﻿using HealthMed.Schedule.Domain.Entities;
-using Newtonsoft.Json;
+﻿using HealthMed.Shared.DTOs;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
+using System.Text.Json;
 
 namespace HealthMed.Appointments.Application.Clients
 {
     public class ScheduleClient
     {
-        private readonly IModel _channel;
-        private readonly HttpClient _http;
+        private readonly IConnection _connection;
 
-        public ScheduleClient(IModel channel, HttpClient http)
+        public ScheduleClient(IConnection connection)
         {
-            _channel = channel;
-            _http = http;
+            _connection = connection;
         }
 
-        public async Task<List<DateTime>> GetAvailableSlotsAsync(Guid doctorId)
+        public async Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(Guid doctorId)
         {
-            var correlationId = Guid.NewGuid().ToString();
-            var replyQueue = _channel.QueueDeclare().QueueName;
-
-            var consumer = new AsyncEventingBasicConsumer(_channel);
+            using var channel = _connection.CreateModel();
+            var replyQueue = channel.QueueDeclare("", false, true, true, null).QueueName;
+            var corrId = Guid.NewGuid().ToString();
             var tcs = new TaskCompletionSource<string>();
 
-            consumer.Received += async (model, ea) =>
+            var consumer = new AsyncEventingBasicConsumer(channel);
+            consumer.Received += (model, ea) =>
             {
-                if (ea.BasicProperties.CorrelationId == correlationId)
+                if (ea.BasicProperties.CorrelationId == corrId)
                 {
-                    var body = ea.Body.ToArray();
-                    var message = Encoding.UTF8.GetString(body);
-                    tcs.SetResult(message);
+                    tcs.TrySetResult(Encoding.UTF8.GetString(ea.Body.ToArray()));
                 }
-
-                await Task.Yield();
+                return Task.CompletedTask;
             };
+            channel.BasicConsume(replyQueue, true, consumer);
 
-            _channel.BasicConsume(queue: replyQueue, autoAck: true, consumer: consumer);
-
-            var props = _channel.CreateBasicProperties();
-            props.CorrelationId = correlationId;
+            var props = channel.CreateBasicProperties();
             props.ReplyTo = replyQueue;
+            props.CorrelationId = corrId;
 
-            var messageBytes = Encoding.UTF8.GetBytes(doctorId.ToString());
+            channel.BasicPublish("", "agenda.request", props,
+                Encoding.UTF8.GetBytes(doctorId.ToString()));
 
-            _channel.BasicPublish(
-                exchange: "",
-                routingKey: "agenda.request",
-                basicProperties: props,
-                body: messageBytes
-            );
-
-            var response = await tcs.Task;
-            return System.Text.Json.JsonSerializer.Deserialize<List<DateTime>>(response) ?? new List<DateTime>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using (cts.Token.Register(() => tcs.TrySetCanceled()))
+            {
+                try
+                {
+                    var json = await tcs.Task;
+                    return JsonSerializer.Deserialize<List<AvailableSlotDto>>(json)
+                           ?? new List<AvailableSlotDto>();
+                }
+                catch (TaskCanceledException)
+                {
+                    Console.WriteLine("[Appointments] Timeout aguardando resposta do Schedule");
+                    return new List<AvailableSlotDto>();
+                }
+            }
         }
 
+        // <<< ADICIONE ESTE MÉTODO
         public async Task<bool> IsSlotAvailable(Guid doctorId, DateTime startTime)
         {
-            var response = await _http.GetAsync($"/api/slots/{doctorId}");
-            if (!response.IsSuccessStatusCode) return false;
-
-            var slots = JsonConvert.DeserializeObject<List<AvailableSlot>>(await response.Content.ReadAsStringAsync());
-
+            var slots = await GetAvailableSlotsAsync(doctorId);
             return slots.Any(s => s.StartTime == startTime);
         }
+        // >>> FIM
     }
 }

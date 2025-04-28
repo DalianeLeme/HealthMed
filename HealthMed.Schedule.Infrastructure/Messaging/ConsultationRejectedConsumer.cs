@@ -1,50 +1,67 @@
-﻿using HealthMed.Shared.DTOs;
-using Newtonsoft.Json;
+﻿// ConsultationRejectedConsumer.cs
+using HealthMed.Schedule.Application.Interfaces;
+using HealthMed.Schedule.Domain.Entities;
+using HealthMed.Shared.Events;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
-using HealthMed.Schedule.Application.Services;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 public class ConsultationRejectedConsumer : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IModel _channel;
+    private const string ExchangeName = nameof(ConsultationRejected);
+    private const string QueueName = nameof(ConsultationRejected);
 
-    public ConsultationRejectedConsumer(IServiceProvider serviceProvider, IModel channel)
+    private readonly IModel _ch;
+    private readonly IServiceScopeFactory _scf;
+
+    public ConsultationRejectedConsumer(IConnection conn, IServiceScopeFactory scf)
     {
-        _serviceProvider = serviceProvider;
-        _channel = channel;
+        _scf = scf;
+        _ch = conn.CreateModel();
 
-        _channel.ExchangeDeclare("consulta.recusada", ExchangeType.Fanout);
-        _channel.QueueDeclare("schedule_recusada", durable: true, exclusive: false, autoDelete: false);
-        _channel.QueueBind("schedule_recusada", "consulta.recusada", "");
+        // 1) declara exchange/fila
+        _ch.ExchangeDeclare(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true, autoDelete: false);
+        _ch.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
+        _ch.QueueBind(queue: QueueName, exchange: ExchangeName, routingKey: "");
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var consumer = new EventingBasicConsumer(_channel);
-        consumer.Received += async (sender, args) =>
+        var consumer = new EventingBasicConsumer(_ch);
+        consumer.Received += async (_, ea) =>
         {
-            var message = Encoding.UTF8.GetString(args.Body.ToArray());
-            var data = JsonConvert.DeserializeObject<AppointmentDto>(message);
-
-            if (data == null) return;
-
-            using var scope = _serviceProvider.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<AvailableSlotService>();
-
-            await service.AddAsync(new HealthMed.Schedule.Domain.Entities.AvailableSlot
+            try
             {
-                Id = Guid.NewGuid(),
-                DoctorId = data.DoctorId,
-                StartTime = data.ScheduledTime,
-                EndTime = data.ScheduledTime.AddMinutes(30)
-            });
+                var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+                var evt = JsonSerializer.Deserialize<ConsultationRejected>(json)
+                           ?? throw new InvalidOperationException("Payload vazio em ConsultationRejected");
+
+                using var scope = _scf.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
+
+                // ■ no caso de REJECTED, devolvemos o horário à agenda:
+                var slot = new AvailableSlot(
+                    Guid.NewGuid(),          // novo Id para o slot
+                    evt.DoctorId,
+                    evt.ScheduledTime,
+                    evt.ScheduledTime.AddMinutes(30)
+                );
+                var ok = await svc.AddAsync(slot);
+                Console.WriteLine($"[Schedule] Consulta recusada: devolvendo slot {slot.Id} (ok={ok})");
+
+                _ch.BasicAck(ea.DeliveryTag, multiple: false);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Schedule] Erro processando {ExchangeName}: {ex}");
+                _ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+            }
         };
 
-        _channel.BasicConsume("schedule_recusada", autoAck: true, consumer: consumer);
+        _ch.BasicConsume(queue: QueueName, autoAck: false, consumer: consumer);
         return Task.CompletedTask;
     }
 }

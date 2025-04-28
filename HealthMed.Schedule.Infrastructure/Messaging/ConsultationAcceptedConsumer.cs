@@ -1,31 +1,64 @@
-﻿using Microsoft.Extensions.Hosting;
-using RabbitMQ.Client.Events;
+﻿// ConsultationAcceptedConsumer.cs
+using HealthMed.Shared.Events;
+using HealthMed.Schedule.Application.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System;
 using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 public class ConsultationAcceptedConsumer : BackgroundService
 {
-    private readonly IModel _channel;
+    private const string ExchangeName = nameof(ConsultationAccepted);
+    private const string QueueName = nameof(ConsultationAccepted);
 
-    public ConsultationAcceptedConsumer(IModel channel)
+    private readonly IModel _ch;
+    private readonly IServiceScopeFactory _scf;
+
+    public ConsultationAcceptedConsumer(IConnection conn, IServiceScopeFactory scf)
     {
-        _channel = channel;
+        _scf = scf;
+        _ch = conn.CreateModel();
 
-        _channel.ExchangeDeclare("consulta.aceita", ExchangeType.Fanout);
-        _channel.QueueDeclare("schedule_aceita", durable: true, exclusive: false, autoDelete: false);
-        _channel.QueueBind("schedule_aceita", "consulta.aceita", "");
+        // 1) declara exchange/fila
+        _ch.ExchangeDeclare(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true, autoDelete: false);
+        _ch.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
+        _ch.QueueBind(queue: QueueName, exchange: ExchangeName, routingKey: "");
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var consumer = new EventingBasicConsumer(_channel);
-        consumer.Received += (sender, args) =>
+        var consumer = new EventingBasicConsumer(_ch);
+        consumer.Received += async (_, ea) =>
         {
-            var message = Encoding.UTF8.GetString(args.Body.ToArray());
-            Console.WriteLine($"Consulta aceita: {message}");
+            try
+            {
+                var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+                var evt = JsonSerializer.Deserialize<ConsultationAccepted>(json)
+                           ?? throw new InvalidOperationException("Payload vazio em ConsultationAccepted");
+
+                // ■ no caso de ACCEPTED, o slot já foi removido lá no ConsultationCreated, 
+                //   aqui só confirmamos que ficará ocupado: 
+                Console.WriteLine(
+                    $"[Schedule] Consulta aceita: " +
+                    $"ConsultationId={evt.ConsultationId}, DoctorId={evt.DoctorId}, PatientId={evt.PatientId}, Time={evt.ScheduledTime:O}"
+                );
+
+                // ack
+                _ch.BasicAck(ea.DeliveryTag, multiple: false);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Schedule] Erro processando {ExchangeName}: {ex}");
+                _ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+            }
         };
 
-        _channel.BasicConsume("schedule_aceita", autoAck: true, consumer: consumer);
+        _ch.BasicConsume(queue: QueueName, autoAck: false, consumer: consumer);
         return Task.CompletedTask;
     }
 }

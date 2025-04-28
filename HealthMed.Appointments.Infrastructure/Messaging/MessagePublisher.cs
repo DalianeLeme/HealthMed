@@ -6,32 +6,35 @@ namespace Appointments.Infra.Messaging;
 
 public class MessagePublisher : IDisposable
 {
-    private readonly RabbitMqConnection _connection;
+    private readonly IModel _channel;
 
-    public MessagePublisher()
+    public MessagePublisher(IConnection connection)
     {
-        _connection = new RabbitMqConnection();
+        // cada publisher escolhe criar um canal próprio
+        _channel = connection.CreateModel();
     }
 
     public void Publish<T>(string queueName, T message)
     {
-        _connection.DeclareQueue(queueName);
+        // garante que a fila exista
+        _channel.QueueDeclare(queue: queueName,
+                              durable: false,
+                              exclusive: false,
+                              autoDelete: false,
+                              arguments: null);
 
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
+        var props = _channel.CreateBasicProperties();
+        props.Persistent = true;
 
-        var properties = _connection.Channel.CreateBasicProperties();
-        properties.Persistent = true;
-
-        _connection.Channel.BasicPublish(
+        _channel.BasicPublish(
             exchange: "",
             routingKey: queueName,
-            basicProperties: properties,
+            basicProperties: props,
             body: body
         );
     }
 
-    public void Dispose()
-    {
-        _connection.Dispose();
-    }
+    public void Dispose() => _channel?.Dispose();
 }
+

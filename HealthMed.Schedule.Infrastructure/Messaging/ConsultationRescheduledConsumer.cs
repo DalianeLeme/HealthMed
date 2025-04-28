@@ -1,52 +1,67 @@
-﻿using Microsoft.Extensions.Hosting;
-using RabbitMQ.Client.Events;
-using RabbitMQ.Client;
-using System.Text;
-using Newtonsoft.Json;
-using HealthMed.Shared.Messages;
+﻿using HealthMed.Shared.Events;
+using HealthMed.Schedule.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using HealthMed.Schedule.Application.Services;
+using Microsoft.Extensions.Hosting;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System.Text;
+using System.Text.Json;
 
-public class ConsultationRescheduledConsumer : BackgroundService
+namespace HealthMed.Schedule.Infrastructure.Messaging
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly RabbitMQ.Client.IModel _channel;
-
-    public ConsultationRescheduledConsumer(IServiceProvider serviceProvider, RabbitMQ.Client.IModel channel)
+    public class ConsultationRescheduledConsumer : BackgroundService
     {
-        _serviceProvider = serviceProvider;
-        _channel = channel;
+        private const string Exchange = nameof(ConsultationRescheduled);
+        private const string Queue = nameof(ConsultationRescheduled);
 
-        _channel.ExchangeDeclare("consultations.rescheduled", ExchangeType.Fanout);
-        _channel.QueueDeclare("schedule_rescheduled", durable: true, exclusive: false, autoDelete: false);
-        _channel.QueueBind("schedule_rescheduled", "consultations.rescheduled", "");
-    }
+        private readonly IModel _ch;
+        private readonly IServiceScopeFactory _scf;
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var consumer = new EventingBasicConsumer(_channel);
-        consumer.Received += async (sender, args) =>
+        public ConsultationRescheduledConsumer(IConnection conn, IServiceScopeFactory scf)
         {
-            var message = Encoding.UTF8.GetString(args.Body.ToArray());
-            var data = JsonConvert.DeserializeObject<ConsultationRescheduledMessage>(message);
+            _scf = scf;
+            _ch = conn.CreateModel();
 
-            using var scope = _serviceProvider.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<AvailableSlotService>();
+            // 1) garante exchange + fila
+            _ch.ExchangeDeclare(Exchange, ExchangeType.Fanout, durable: true, autoDelete: false);
+            _ch.QueueDeclare(Queue, durable: true, exclusive: false, autoDelete: false, arguments: null);
+            _ch.QueueBind(Queue, Exchange, routingKey: "");
+        }
 
-            // Remove horário antigo
-            await service.RemoveSlotByTimeAsync(data.DoctorId, data.OldTime);
-
-            // Adiciona novo horário
-            await service.AddAsync(new HealthMed.Schedule.Domain.Entities.AvailableSlot
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            var consumer = new EventingBasicConsumer(_ch);
+            consumer.Received += async (_, ea) =>
             {
-                Id = Guid.NewGuid(),
-                DoctorId = data.DoctorId,
-                StartTime = data.NewTime,
-                EndTime = data.NewTime.AddMinutes(30)
-            });
-        };
+                try
+                {
+                    var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+                    var evt = JsonSerializer.Deserialize<ConsultationRescheduled>(json)!;
 
-        _channel.BasicConsume("schedule_rescheduled", autoAck: true, consumer: consumer);
-        return Task.CompletedTask;
+                    using var scope = _scf.CreateScope();
+                    var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
+
+                    // Remove o antigo e adiciona o novo
+                    await svc.RemoveSlotByTimeAsync(evt.DoctorId, evt.OldTime);
+                    await svc.AddAsync(new HealthMed.Schedule.Domain.Entities.AvailableSlot
+                    {
+                        Id = Guid.NewGuid(),
+                        DoctorId = evt.DoctorId,
+                        StartTime = evt.NewTime,
+                        EndTime = evt.NewTime.AddMinutes(30)
+                    });
+
+                    _ch.BasicAck(ea.DeliveryTag, multiple: false);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[Schedule] erro ao processar remarcação: {ex}");
+                    _ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+                }
+            };
+
+            _ch.BasicConsume(queue: Queue, autoAck: false, consumer: consumer);
+            return Task.CompletedTask;
+        }
     }
 }

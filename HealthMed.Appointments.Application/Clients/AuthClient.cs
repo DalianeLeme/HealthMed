@@ -12,9 +12,13 @@ namespace HealthMed.Appointments.Application.Clients
             _httpClient = httpClient;
         }
 
-        public async Task<List<UserDto>> GetAllDoctorsAsync()
+        public async Task<List<UserDto>> GetAllDoctorsAsync(string? specialty = null)
         {
-            var response = await _httpClient.GetAsync("api/auth/doctors");
+            var url = "api/auth/doctors";
+                if (!string.IsNullOrWhiteSpace(specialty))
+                url += $"?specialty={Uri.EscapeDataString(specialty)}";
+            
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
             var doctors = await response.Content.ReadFromJsonAsync<List<UserDto>>();

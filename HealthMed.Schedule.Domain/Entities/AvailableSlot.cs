@@ -6,4 +6,13 @@ public class AvailableSlot
     public Guid DoctorId { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
+
+    public AvailableSlot(Guid id, Guid doctorId, DateTime startTime, DateTime endTime)
+    {
+        Id = id;
+        DoctorId = doctorId;
+        StartTime = startTime;
+        EndTime = endTime;
+    }
+    public AvailableSlot() { }
 }

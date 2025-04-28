@@ -1,162 +1,215 @@
-﻿using Appointments.Infra.Messaging;
-using HealthMed.Appointments.Application.Clients;
+﻿// HealthMed.Appointments.Application/Services/AppointmentService.cs
+using HealthMed.Appointments.Application.Interfaces;
 using HealthMed.Appointments.Domain.Entities;
 using HealthMed.Appointments.Domain.Enums;
 using HealthMed.Appointments.Domain.Interfaces;
-using HealthMed.Schedule.Application.Models;
-using HealthMed.Shared.DTOs;
+using HealthMed.Shared.Events;
+using HealthMed.Shared.Messaging;
+using AppointmentSlot = HealthMed.Appointments.Domain.Entities.AvailableSlotProjection;
 
-namespace HealthMed.Appointments.Application.Services;
-
-public class AppointmentService
+namespace HealthMed.Appointments.Application.Services
 {
-    private readonly IAppointmentRepository _appointmentRepository;
-    private readonly MessagePublisher _publisher;
-    private readonly ScheduleClient _scheduleClient;
-
-    public AppointmentService(IAppointmentRepository appointmentRepository, MessagePublisher publisher, ScheduleClient scheduleClient)
+    public class AppointmentService : IAppointmentService
     {
-        _appointmentRepository = appointmentRepository;
-        _publisher = publisher;
-        _scheduleClient = scheduleClient;
-    }
+        private readonly IAppointmentRepository _appointmentRepository;
+        private readonly IAvailableSlotProjectionRepository _slotRepo;
+        private readonly IEventPublisher _publisher;
 
-    public async Task<bool> ScheduleAppointmentAsync(Guid doctorId, Guid patientId, DateTime scheduledTime)
-    {
-        var availableSlots = await _scheduleClient.GetAvailableSlotsAsync(doctorId);
-
-        if (!availableSlots.Contains(scheduledTime))
-            return false;
-
-        var appointment = new Appointment
+        public AppointmentService(
+            IAppointmentRepository appointmentRepository,
+            IAvailableSlotProjectionRepository slotRepo,
+            IEventPublisher publisher)
         {
-            Id = Guid.NewGuid(),
-            DoctorId = doctorId,
-            PatientId = patientId,
-            ScheduledTime = scheduledTime,
-            Status = AppointmentStatus.Pending
-        };
-
-        await _appointmentRepository.AddAppointment(appointment);
-
-        var dto = new AppointmentDto
-        {
-            Id = appointment.Id,
-            DoctorId = doctorId,
-            PatientId = patientId,
-            ScheduledTime = scheduledTime,
-            Status = appointment.Status.ToString()
-        };
-
-        _publisher.Publish("consulta.agendada", dto);
-
-        return true;
-    }
-
-    public async Task<List<Appointment>> GetAppointmentsByDoctorAsync(Guid doctorId)
-    {
-        return await _appointmentRepository.GetAppointmentsByDoctor(doctorId);
-    }
-
-    public async Task<List<Appointment>> GetAppointmentsByPatientAsync(Guid patientId)
-    {
-        return await _appointmentRepository.GetAppointmentsByPatient(patientId);
-    }
-
-    public async Task<bool> UpdateAppointmentStatusAsync(Guid appointmentId, AppointmentStatus newStatus, Guid doctorId)
-    {
-        var appointment = await _appointmentRepository.FindByIdAsync(appointmentId);
-        if (appointment == null || appointment.DoctorId != doctorId)
-            return false;
-
-        appointment.Status = newStatus;
-        await _appointmentRepository.UpdateAppointment(appointment);
-
-        // Publica evento (opcional)
-        if (newStatus == AppointmentStatus.Accepted || newStatus == AppointmentStatus.Rejected)
-        {
-            var dto = new AppointmentDto
-            {
-                Id = appointment.Id,
-                DoctorId = appointment.DoctorId,
-                PatientId = appointment.PatientId,
-                ScheduledTime = appointment.ScheduledTime,
-                Status = newStatus.ToString() // se o DTO ainda espera string
-            };
-
-            var topic = newStatus == AppointmentStatus.Accepted ? "consulta.aceita" : "consulta.recusada";
-            _publisher.Publish(topic, dto);
+            _appointmentRepository = appointmentRepository;
+            _slotRepo = slotRepo;
+            _publisher = publisher;
         }
 
-        return true;
-    }
-
-    public async Task<bool> CancelAppointmentAsync(Guid appointmentId, Guid patientId)
-    {
-        var appointment = await _appointmentRepository.FindByIdAsync(appointmentId);
-        if (appointment == null || appointment.PatientId != patientId)
-            return false;
-
-        appointment.Status = AppointmentStatus.Cancelled; //  enum ao invés de string
-        await _appointmentRepository.UpdateAppointment(appointment);
-
-        var dto = new AppointmentDto
+        public async Task<bool> ScheduleAppointmentAsync(Guid slotId, Guid patientId)
         {
-            Id = appointment.Id,
-            DoctorId = appointment.DoctorId,
-            PatientId = appointment.PatientId,
-            ScheduledTime = appointment.ScheduledTime,
-            Status = appointment.Status.ToString() //  convertido para string no DTO
-        };
+            var slot = await _slotRepo.GetByIdAsync(slotId);
+            if (slot is null) return false;
 
-        _publisher.Publish("consulta.cancelada", dto);
-        return true;
-    }
+            if (await _appointmentRepository.ExistsByDoctorAndTimeAsync(slot.DoctorId, slot.StartTime))
+                return false;
 
-    public async Task<bool> RescheduleAppointmentAsync(Guid appointmentId, DateTime newTime, Guid patientId)
-    {
-        var appointment = await _appointmentRepository.FindByIdAsync(appointmentId);
-        if (appointment == null || appointment.PatientId != patientId)
-            return false;
-
-        var isAvailable = await _scheduleClient.IsSlotAvailable(appointment.DoctorId, newTime);
-        if (!isAvailable) return false;
-
-        var oldTime = appointment.ScheduledTime;
-        appointment.ScheduledTime = newTime;
-        appointment.Status = AppointmentStatus.Pending; //  usando o enum
-
-        await _appointmentRepository.UpdateAppointment(appointment);
-
-        var dto = new RescheduleDto
-        {
-            AppointmentId = appointment.Id,
-            DoctorId = appointment.DoctorId,
-            OldTime = oldTime,
-            NewTime = newTime
-        };
-
-        _publisher.Publish("consulta.remarcada", dto);
-        return true;
-    }
-
-    public async Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(Guid doctorId)
-    {
-        var allSlots = await _scheduleClient.GetAvailableSlotsAsync(doctorId); // List<DateTime>
-        var appointments = await _appointmentRepository.GetAppointmentsByDoctor(doctorId);
-
-        var takenTimes = appointments.Select(a => a.ScheduledTime);
-
-        var available = allSlots
-            .Where(slot => !takenTimes.Contains(slot))
-            .Select(slot => new AvailableSlotDto
+            var appt = new Appointment
             {
-                Id = Guid.NewGuid(), // gerando um ID temporário, ou pode ser omitido se não for usado
-                StartTime = slot,
-                EndTime = slot.AddMinutes(30) // ou a duração que seu sistema define como padrão
-            })
-            .ToList();
+                Id = Guid.NewGuid(),
+                SlotId = slot.Id,
+                DoctorId = slot.DoctorId,
+                PatientId = patientId,
+                ScheduledTime = slot.StartTime,
+                EndTime = slot.EndTime,      // salva aqui
+                Status = AppointmentStatus.Pending
+            };
 
-        return available;
+            await _appointmentRepository.AddAppointment(appt);
+
+            _publisher.Publish(
+                nameof(ConsultationCreated),
+                new ConsultationCreated(
+                appt.Id,
+                appt.SlotId,
+                appt.DoctorId,
+                appt.ScheduledTime)
+            );
+
+            return true;
+        }
+
+        public async Task<UpdateStatusResult> UpdateAppointmentStatusAsync(
+            Guid appointmentId,
+            AppointmentStatus newStatus,
+            Guid doctorId)
+        {
+            var appt = await _appointmentRepository.FindByIdAsync(appointmentId);
+            if (appt == null)
+                return UpdateStatusResult.NotFound;
+
+            if (appt.DoctorId != doctorId)
+                return UpdateStatusResult.Forbidden;
+
+                // só permite transição se o status atual for Pending
+                 if (appt.Status != AppointmentStatus.Pending)
+                        return UpdateStatusResult.Forbidden;
+
+            appt.Status = newStatus;
+            await _appointmentRepository.UpdateAppointment(appt);
+
+            if (newStatus == AppointmentStatus.Accepted)
+            {
+                _publisher.Publish(
+                    nameof(ConsultationAccepted),
+                    new ConsultationAccepted(
+                        appt.Id,
+                        appt.DoctorId,
+                        appt.PatientId,
+                        appt.ScheduledTime
+                    )
+                );
+            }
+            else if (newStatus == AppointmentStatus.Rejected)
+            {
+                // recupera o slot projetado para saber o EndTime real
+                var slot = await _slotRepo.GetByIdAsync(appt.SlotId);
+                var endTime = slot?.EndTime ?? appt.ScheduledTime;
+
+                _publisher.Publish(
+                    nameof(ConsultationRejected),
+                    new ConsultationRejected(
+                        appt.Id,
+                        appt.DoctorId,
+                        appt.PatientId,
+                        appt.ScheduledTime,
+                        endTime
+                    )
+                );
+            }
+
+            return UpdateStatusResult.Success;
+        }
+
+
+        public async Task<List<AppointmentSlot>> GetAvailableSlotsAsync(Guid doctorId)
+            => await _slotRepo.GetByDoctorAsync(doctorId);
+
+        public async Task<List<Appointment>> GetAppointmentsByDoctorAsync(Guid doctorId)
+            => await _appointmentRepository.GetAppointmentsByDoctor(doctorId);
+
+        public async Task<List<Appointment>> GetAppointmentsByPatientAsync(Guid patientId)
+            => await _appointmentRepository.GetAppointmentsByPatient(patientId);
+
+        public async Task<bool> CancelAppointmentAsync(Guid appointmentId, Guid patientId, string justification)
+        {
+            // 1) Busca e valida
+            var appt = await _appointmentRepository.FindByIdAsync(appointmentId);
+            if (appt is null || appt.PatientId != patientId)
+                return false;
+
+            // 2) Não permite cancelar de novo nem se já foi recusada
+            if (appt.Status == AppointmentStatus.Cancelled
+             || appt.Status == AppointmentStatus.Rejected)
+            {
+                return false;
+            }
+
+            // 3) Atualiza status para Cancelled
+            appt.Status = AppointmentStatus.Cancelled;
+            appt.CancellationReason = justification;
+            await _appointmentRepository.UpdateAppointment(appt);
+
+            // 4) Publica evento para devolver o slot
+            _publisher.Publish(
+                nameof(ConsultationCancelled),
+                new ConsultationCancelled(
+                    appt.Id,
+                    appt.DoctorId,
+                    appt.PatientId,
+                    appt.ScheduledTime,
+                    appt.EndTime
+                )
+            );
+
+            return true;
+        }
+
+        public async Task<bool> RescheduleAppointmentAsync(
+            Guid appointmentId,
+            Guid newSlotId,
+            Guid patientId)
+        {
+            // 1) Busca a consulta
+            var appt = await _appointmentRepository.FindByIdAsync(appointmentId);
+            if (appt is null
+             || appt.PatientId != patientId
+             // só não pode reagendar se estiver Rejected ou Cancelled
+             || appt.Status == AppointmentStatus.Rejected
+             || appt.Status == AppointmentStatus.Cancelled)
+            {
+                return false;
+            }
+
+            // 2) Dados do slot antigo
+            var oldStart = appt.ScheduledTime;
+            var oldEnd = appt.EndTime;
+
+            // 3) Verifica novo slot
+            var newSlot = await _slotRepo.GetByIdAsync(newSlotId);
+            if (newSlot is null)
+                return false;
+
+            // 4) Libera antigo
+            _publisher.Publish(
+                nameof(ConsultationCancelled),
+                new ConsultationCancelled(
+                    appt.Id,
+                    appt.DoctorId,
+                    appt.PatientId,
+                    oldStart,
+                    oldEnd
+                )
+            );
+
+            // 5) Reserva novo
+            _publisher.Publish(
+                nameof(ConsultationCreated),
+                new ConsultationCreated(
+                    appt.Id,
+                    newSlot.Id,
+                    appt.DoctorId,
+                    newSlot.StartTime
+                )
+            );
+
+            // 6) Atualiza entidade
+            appt.SlotId = newSlot.Id;
+            appt.ScheduledTime = newSlot.StartTime;
+            appt.EndTime = newSlot.EndTime;
+            appt.Status = AppointmentStatus.Pending; // volta a Pending para reaceitação
+            await _appointmentRepository.UpdateAppointment(appt);
+
+            return true;
+        }
     }
 }

@@ -7,7 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="6.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HealthMed.Schedule.Domain\HealthMed.Schedule.Domain.csproj" />
+    <ProjectReference Include="..\HealthMed.Shared\HealthMed.Shared.csproj" />
   </ItemGroup>
 
 </Project>

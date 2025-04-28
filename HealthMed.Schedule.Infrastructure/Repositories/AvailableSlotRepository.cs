@@ -33,14 +33,10 @@ public class AvailableSlotRepository : IAvailableSlotRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(AvailableSlot slot)
     {
-        var slot = await _context.AvailableSlots.FindAsync(id);
-        if (slot != null)
-        {
-            _context.AvailableSlots.Remove(slot);
-            await _context.SaveChangesAsync();
-        }
+        _context.AvailableSlots.Remove(slot);
+        await _context.SaveChangesAsync();
     }
 
     public async Task<AvailableSlot?> GetByTimeAsync(Guid doctorId, DateTime startTime)
@@ -53,4 +49,7 @@ public class AvailableSlotRepository : IAvailableSlotRepository
     {
         return _context.AvailableSlots.FindAsync(id).AsTask();
     }
+    public async Task<bool> ExistsByIdAsync(Guid slotId)
+       => await _context.AvailableSlots.AnyAsync(s => s.Id == slotId);
+
 }

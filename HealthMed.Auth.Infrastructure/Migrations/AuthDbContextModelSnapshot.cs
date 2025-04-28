@@ -22,6 +22,29 @@ namespace HealthMed.Auth.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("HealthMed.Auth.Domain.Entities.DoctorProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CRM")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("ConsultationValor")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Specialty")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("DoctorProfiles", (string)null);
+                });
+
             modelBuilder.Entity("HealthMed.Auth.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -31,16 +54,15 @@ namespace HealthMed.Auth.Infrastructure.Migrations
                     b.Property<string>("CPF")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("CRM")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -56,6 +78,22 @@ namespace HealthMed.Auth.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("HealthMed.Auth.Domain.Entities.DoctorProfile", b =>
+                {
+                    b.HasOne("HealthMed.Auth.Domain.Entities.User", "User")
+                        .WithOne("Profile")
+                        .HasForeignKey("HealthMed.Auth.Domain.Entities.DoctorProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("HealthMed.Auth.Domain.Entities.User", b =>
+                {
+                    b.Navigation("Profile");
                 });
 #pragma warning restore 612, 618
         }

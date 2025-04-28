@@ -1,128 +1,136 @@
-using Appointments.Infra.Messaging;
 using HealthMed.Appointments.Application.Clients;
-using HealthMed.Appointments.Application.Events;
+using HealthMed.Appointments.Application.Interfaces;
 using HealthMed.Appointments.Application.Services;
+using HealthMed.Appointments.Domain.Enums;               // para AppointmentStatus
 using HealthMed.Appointments.Domain.Interfaces;
 using HealthMed.Appointments.Infrastructure.Data;
+using HealthMed.Appointments.Infrastructure.Handlers;
+using HealthMed.Appointments.Infrastructure.Messaging;
 using HealthMed.Appointments.Infrastructure.Repositories;
+using HealthMed.Shared.Messaging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Any;                            // para OpenApiString
+using Microsoft.OpenApi.Models;
 using RabbitMQ.Client;
+using System;
+using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;                   // JsonStringEnumConverter
 
 var builder = WebApplication.CreateBuilder(args);
-var configuration = builder.Configuration;
+var cfg = builder.Configuration;
 
+// 1) Porta
 builder.WebHost.UseUrls("http://0.0.0.0:80");
 
-// Configuração do banco de dados
-builder.Services.AddDbContext<AppointmentsDbContext>(options =>
-    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+// 2) EF Core
+builder.Services.AddDbContext<AppointmentsDbContext>(opt =>
+    opt.UseSqlServer(cfg.GetConnectionString("DefaultConnection"))
+);
 
-// Configuração do RabbitMQ
-builder.Services.AddSingleton<IConnection>(sp =>
-{
-    var rabbitHost = configuration["RabbitMQ:Host"] ?? throw new InvalidOperationException("RabbitMQ Host is missing.");
-    var rabbitPortStr = configuration["RabbitMQ:Port"] ?? "5672";
-    var rabbitUser = configuration["RabbitMQ:Username"] ?? "guest";
-    var rabbitPass = configuration["RabbitMQ:Password"] ?? "guest";
-
-    if (!int.TryParse(rabbitPortStr, out var rabbitPort))
-        throw new InvalidOperationException("RabbitMQ Port is invalid.");
-
+// 3) Conexão RabbitMQ
+builder.Services.AddSingleton<IConnection>(sp => {
+    var cfg = sp.GetRequiredService<IConfiguration>();
     var factory = new ConnectionFactory
     {
-        HostName = rabbitHost,
-        Port = rabbitPort,
-        UserName = rabbitUser,
-        Password = rabbitPass
+        HostName = cfg["RabbitMQ:Host"]!,
+        Port = int.Parse(cfg["RabbitMQ:Port"]!),
+        UserName = cfg["RabbitMQ:Username"]!,
+        Password = cfg["RabbitMQ:Password"]!
     };
-
     return factory.CreateConnection();
 });
 
-builder.Services.AddSingleton<IModel>(sp =>
-{
-    var connection = sp.GetRequiredService<IConnection>();
-    return connection.CreateModel();
-});
-
-builder.Services.AddSingleton<RabbitMQPublisher>();
-builder.Services.AddSingleton<ScheduleClient>();
-builder.Services.AddScoped<MessagePublisher>();
-builder.Services.AddScoped<AppointmentService>();
+// 4) Repositórios e serviços
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+builder.Services.AddScoped<IAvailableSlotProjectionRepository, AvailableSlotProjectionRepository>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-// HTTP Client para Schedule
-builder.Services.AddHttpClient<ScheduleClient>(client =>
-{
-    client.BaseAddress = new Uri("http://schedule.api");
-});
+// 5) Publisher — agora recebe IConnection e cria seu próprio canal
+builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+
+// 6) HostedServices (consumidores de eventos para popular projeções)
+builder.Services.AddHostedService<SlotCreatedConsumer>();
+builder.Services.AddHostedService<SlotDeletedConsumer>();
+
+// 7) HTTP + Auth
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<AuthTokenHandler>();
 builder.Services.AddHttpClient<AuthClient>(client =>
 {
-    client.BaseAddress = new Uri("http://auth.api"); // nome do container no Docker
-});
+    client.BaseAddress = new Uri(cfg["AuthApi:BaseUrl"]!);
+})
+.AddHttpMessageHandler<AuthTokenHandler>();
 
-// Swagger
+// 8) Controllers + JSON enum as string
+builder.Services.AddControllers()
+    .AddJsonOptions(opts =>
+        opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter())
+    );
+
+// 9) Swagger + JWT + enum doc
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new() { Title = "HealthMed.Appointments.API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Appointments.API", Version = "v1" });
 
-    // JWT no Swagger
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    // security
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer",
         BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Digite: Bearer {seu_token_jwt}"
+        Description = "Digite: Bearer {seu_token}"
     });
-
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+            new OpenApiSecurityScheme {
+                Reference = new OpenApiReference {
+                    Type = ReferenceType.SecurityScheme,
+                    Id   = "Bearer"
                 }
             },
             Array.Empty<string>()
         }
     });
+
+    // documenta AppointmentStatus como string e lista de valores
+    c.MapType<AppointmentStatus>(() =>
+        new OpenApiSchema
+        {
+            Type = "string",
+            Enum = Enum
+                .GetNames(typeof(AppointmentStatus))
+                .Select(n => new OpenApiString(n) as IOpenApiAny)
+                .ToList()
+        }
+    );
 });
 
-// JWT
-var jwtKey = configuration["Jwt:Key"]!;
+var jwtKey = Encoding.UTF8.GetBytes(cfg["Jwt:Key"]!);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer(opt =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        opt.TokenValidationParameters = new TokenValidationParameters
         {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(jwtKey),
             ValidateIssuer = false,
             ValidateAudience = false,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            ValidateLifetime = true
         };
     });
-
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment() || true)
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
+// Pipeline
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

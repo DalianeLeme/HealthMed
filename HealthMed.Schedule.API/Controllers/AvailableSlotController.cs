@@ -1,7 +1,7 @@
-﻿using HealthMed.Schedule.Application.Services;
+﻿using HealthMed.Schedule.Application.Interfaces;
 using HealthMed.Schedule.Domain.Entities;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace HealthMed.Schedule.API.Controllers;
@@ -11,9 +11,9 @@ namespace HealthMed.Schedule.API.Controllers;
 [Route("api/slots")]
 public class AvailableSlotController : ControllerBase
 {
-    private readonly AvailableSlotService _service;
+    private readonly IAvailableSlotService _service;
 
-    public AvailableSlotController(AvailableSlotService service)
+    public AvailableSlotController(IAvailableSlotService service)
     {
         _service = service;
     }
@@ -63,20 +63,18 @@ public class AvailableSlotController : ControllerBase
         slot.StartTime = request.StartTime;
         slot.EndTime = request.EndTime;
 
-        await _service.UpdateAsync(slot);
+        var ok = await _service.UpdateAsync(slot);
+        if (!ok) return NotFound("Horário não encontrado.");
+
         return Ok("Horário atualizado.");
     }
-
 
     [Authorize(Roles = "Doctor")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        // Aqui poderíamos buscar o slot pelo id, validar se pertence ao médico autenticado
         var doctorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (doctorId == null) return Unauthorized();
-
-        // (opcional) você pode buscar o slot do banco e validar que o doctorId bate
 
         await _service.DeleteAsync(id);
         return Ok("Horário removido.");

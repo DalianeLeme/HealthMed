@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HealthMed.Auth.Application\HealthMed.Auth.Application.csproj" />
     <ProjectReference Include="..\HealthMed.Auth.Infrastructure\HealthMed.Auth.Infrastructure.csproj" />
+    <ProjectReference Include="..\HealthMed.Shared\HealthMed.Shared.csproj" />
   </ItemGroup>
   
   <ItemGroup>

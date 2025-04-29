@@ -1,7 +1,4 @@
-﻿using HealthMed.Shared.DTOs;
-using System.Text.Json.Serialization;
-
-namespace HealthMed.Auth.Application.Models
+﻿namespace HealthMed.Auth.Application.Models
 {
     public class RegisterRequest
     {

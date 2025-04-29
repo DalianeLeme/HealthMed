@@ -94,8 +94,6 @@ namespace HealthMed.Schedule.Application.Services
 
             return true;
         }
-
-
         public Task<AvailableSlot?> GetByIdAsync(Guid id)
             => _repository.GetByIdAsync(id);
     }

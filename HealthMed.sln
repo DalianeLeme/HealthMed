@@ -37,6 +37,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HealthMed.Schedule.Applicat
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HealthMed.Schedule.API", "HealthMed.Schedule.API\HealthMed.Schedule.API.csproj", "{7FC96704-2222-4B02-9ACD-B55BCBA28CC6}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "unitTests", "unitTests", "{D94D7B60-36AB-4815-B9B0-D24C104BB7AC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HealthMed.Auth.Application.Tests", "HealthMed.Auth.Application.Tests\HealthMed.Auth.Application.Tests.csproj", "{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HealthMed.Schedule.Application.Tests", "HealthMed.Schedule.Application.Tests\HealthMed.Schedule.Application.Tests.csproj", "{32C2DF67-DCBE-4E6B-98C3-4185632713B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HealthMed.Appointments.Application.Tests", "HealthMed.Appointments.Application.Tests\HealthMed.Appointments.Application.Tests.csproj", "{19E837CB-021B-4875-A628-B85621490CA8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -95,6 +103,18 @@ Global
 		{7FC96704-2222-4B02-9ACD-B55BCBA28CC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7FC96704-2222-4B02-9ACD-B55BCBA28CC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7FC96704-2222-4B02-9ACD-B55BCBA28CC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{32C2DF67-DCBE-4E6B-98C3-4185632713B9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32C2DF67-DCBE-4E6B-98C3-4185632713B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32C2DF67-DCBE-4E6B-98C3-4185632713B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32C2DF67-DCBE-4E6B-98C3-4185632713B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19E837CB-021B-4875-A628-B85621490CA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19E837CB-021B-4875-A628-B85621490CA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19E837CB-021B-4875-A628-B85621490CA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19E837CB-021B-4875-A628-B85621490CA8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -113,5 +133,8 @@ Global
 		{8ABD917C-EB9E-49C4-9F00-EB6A2885400B} = {6C5AAB15-B417-48AB-9A69-22816FED272D}
 		{766131DF-0833-455B-BE89-3F3B6C3B9065} = {6C5AAB15-B417-48AB-9A69-22816FED272D}
 		{7FC96704-2222-4B02-9ACD-B55BCBA28CC6} = {6C5AAB15-B417-48AB-9A69-22816FED272D}
+		{C7DF6091-7A7B-4371-8EEF-6FB443C0DADE} = {D94D7B60-36AB-4815-B9B0-D24C104BB7AC}
+		{32C2DF67-DCBE-4E6B-98C3-4185632713B9} = {D94D7B60-36AB-4815-B9B0-D24C104BB7AC}
+		{19E837CB-021B-4875-A628-B85621490CA8} = {D94D7B60-36AB-4815-B9B0-D24C104BB7AC}
 	EndGlobalSection
 EndGlobal

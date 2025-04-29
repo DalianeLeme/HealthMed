@@ -10,22 +10,40 @@ on:
 
 jobs:
   build:
+    name: 🛠Build
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout do código
-      uses: actions/checkout@v4
+      - name: Checkout do código
+        uses: actions/checkout@v4
 
-    - name: Configurar .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Restaurar dependências
-      run: dotnet restore
+      - name: Restaurar dependências
+        run: dotnet restore
 
-    - name: Buildar o projeto
-      run: dotnet build --configuration Release --no-restore
+      - name: Buildar o projeto
+        run: dotnet build --configuration Release --no-restore
 
-    - name: Rodar testes
-      run: dotnet test --no-build --verbosity normal
+  test:
+    name: Testes Unitários
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaurar dependências
+        run: dotnet restore
+
+      - name: Rodar testes
+        run: dotnet test --no-build --verbosity normal

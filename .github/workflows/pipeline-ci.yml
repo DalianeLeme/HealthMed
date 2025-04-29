@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: 🛠Build
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -46,4 +46,4 @@ jobs:
         run: dotnet restore
 
       - name: Rodar testes
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test --verbosity normal

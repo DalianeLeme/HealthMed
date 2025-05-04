@@ -37,7 +37,7 @@ namespace HealthMed.Appointments.Application.Services
                 DoctorId = slot.DoctorId,
                 PatientId = patientId,
                 ScheduledTime = slot.StartTime,
-                EndTime = slot.EndTime,      // salva aqui
+                EndTime = slot.EndTime,      
                 Status = AppointmentStatus.Pending
             };
 

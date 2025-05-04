@@ -33,7 +33,7 @@ Sistema para startup Health&Med, proporcionando a possibilidadce de agendamendo 
 :small_blue_diamond: Criptografia de dados sensíveis. </br>
 
 # Diagrama requisitos funcionais
-
+![Diagrama-funcional](./Assets/HealthMed-diagrama.jpg)
 
 # :heavy_check_mark: Técnicas e tecnologias utilizadas
 `.NET8` `C#` `SQL Server` `GitHub Actions`  `Testes unitários` `xUnit` `EntityFramework`

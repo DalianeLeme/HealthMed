@@ -38,7 +38,7 @@ Sistema para startup Health&Med, proporcionando a possibilidadce de agendamendo 
 # :heavy_check_mark: Técnicas e tecnologias utilizadas
 `.NET8` `C#` `SQL Server` `GitHub Actions`  `Testes unitários` `xUnit` `EntityFramework`
 `FluentValidator` `RabbitMQ` `Eventos` `Kubernetes` `Docker`
-<br></br>
+<br> </br>
 
 # :busts_in_silhouette: Autores
 [<img loading="lazy" src="https://avatars.githubusercontent.com/u/55365144?v=4" width=115><br><sub>Daliane Leme</sub>](https://github.com/DalianeLeme)

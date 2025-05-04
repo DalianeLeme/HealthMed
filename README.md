@@ -14,15 +14,12 @@
 
 # :pushpin: Descrição do projeto
 API em .NET8 feita para entrega do Hackaton Pós Tech FIAP. <br>
-Sistema para startup Health&Med, proporcionando a possibilidadce de agendamendo e realização . </br>
+Sistema para startup Health&Med, proporcionando a possibilidadce de agendamento de consultas online. </br>
 
-<br></br>
-
-# Requisitos não funcionais
-
+# :notebook: Requisitos não funcionais
 - `Alta disponibilidade`: </br>
 :bookmark_tabs:Kubernetes com réplicas e volumes (ConfigMap e deployment). </br>
-:bookmark_tabs:Arquitetura por eventos evitando pontos únicos de falaha. </br>
+:bookmark_tabs:Arquitetura por eventos evitando pontos únicos de falha. </br>
 
 - `Escalabilidade`:  </br>
 :small_red_triangle_down: Microsserviços independentes que podem ser escalados individualmente conforme carga. </br>
@@ -32,7 +29,7 @@ Sistema para startup Health&Med, proporcionando a possibilidadce de agendamendo 
 :small_blue_diamond: Autenticação com JWT, garantindo acesso seguro e com controle por perfil (médico/paciente). </br>
 :small_blue_diamond: Criptografia de dados sensíveis. </br>
 
-# Diagrama requisitos funcionais
+# :bar_chart: Diagrama requisitos funcionais
 ![Diagrama-funcional](./Assets/HealthMed-diagrama.jpg)
 
 # :heavy_check_mark: Técnicas e tecnologias utilizadas

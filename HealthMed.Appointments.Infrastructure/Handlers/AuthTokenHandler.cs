@@ -2,7 +2,6 @@
 
 namespace HealthMed.Appointments.Infrastructure.Handlers
 {
-    // 1) Defina um handler concreto em um arquivo separado:
     public class AuthTokenHandler : DelegatingHandler
     {
         private readonly IHttpContextAccessor _accessor;
@@ -20,5 +19,4 @@ namespace HealthMed.Appointments.Infrastructure.Handlers
             return await base.SendAsync(request, cancellationToken);
         }
     }
-
 }

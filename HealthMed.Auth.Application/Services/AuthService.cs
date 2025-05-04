@@ -1,7 +1,6 @@
 ﻿using HealthMed.Auth.Domain.Entities;
 using HealthMed.Auth.Domain.Interfaces;
 using HealthMed.Shared.DTOs;
-using BCrypt.Net;
 
 namespace HealthMed.Auth.Application.Services
 {
@@ -13,7 +12,6 @@ namespace HealthMed.Auth.Application.Services
         {
             _userRepository = userRepository;
         }
-
         public async Task<bool> RegisterUserAsync(
             string name,
             string email,
@@ -24,12 +22,10 @@ namespace HealthMed.Auth.Application.Services
             decimal? consultationFee = null,
             string? cpf = null)
         {
-            // não mexemos nessa parte:
             var existingUser = await _userRepository.GetByIdentifierAsync(email);
             if (existingUser != null)
                 return false;
 
-            // cria o usuário base
             var newUser = new User
             {
                 Id = Guid.NewGuid(),
@@ -40,7 +36,6 @@ namespace HealthMed.Auth.Application.Services
                 CPF = role == "Patient" ? cpf : null
             };
 
-            // só para médicos: injeta o Profile
             if (role == "Doctor")
             {
                 if (crm == null ||
@@ -65,7 +60,6 @@ namespace HealthMed.Auth.Application.Services
 
         public async Task<User?> AuthenticateUserAsync(string identifier, string password)
         {
-            // mesmíssimo fluxo de busca
             var user = await _userRepository.FindByCRMAsync(identifier)
                     ?? await _userRepository.FindByCPFAsync(identifier)
                     ?? await _userRepository.FindByEmailAsync(identifier);
@@ -78,10 +72,8 @@ namespace HealthMed.Auth.Application.Services
 
         public async Task<List<UserDto>> GetAllDoctorsAsync(string? specialty = null)
         {
-            // busca todos os usuários com Role = "Doctor", já incluindo o profile
             var doctors = await _userRepository.GetAllDoctorsAsync();
 
-            // se vier specialty, filtra pela specialty do profile
             if (!string.IsNullOrWhiteSpace(specialty))
             {
                 doctors = doctors
@@ -92,7 +84,6 @@ namespace HealthMed.Auth.Application.Services
                     .ToList();
             }
 
-            // mapeia para UserDto, incluindo CRM, Specialty e ConsultationValor
             return doctors.Select(d => new UserDto
             {
                 Id = d.Id,

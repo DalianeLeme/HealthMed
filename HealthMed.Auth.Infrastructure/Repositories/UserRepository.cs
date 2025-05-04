@@ -16,7 +16,6 @@ namespace HealthMed.Auth.Infrastructure.Repositories
 
         public async Task<User?> FindByCRMAsync(string crm)
         {
-            // busca o profile e retorna o User associado
             var profile = await _context.DoctorProfiles
                 .Include(p => p.User)
                 .FirstOrDefaultAsync(p => p.CRM == crm);
@@ -38,7 +37,6 @@ namespace HealthMed.Auth.Infrastructure.Repositories
 
         public async Task<User?> GetByIdentifierAsync(string identifier)
         {
-            // inclui profile para poder filtrar por CRM também
             return await _context.Users
                 .Include(u => u.Profile)
                 .FirstOrDefaultAsync(u =>
@@ -56,7 +54,6 @@ namespace HealthMed.Auth.Infrastructure.Repositories
 
         public async Task<List<User>> GetAllDoctorsAsync()
         {
-            // inclui profile para retorno completo
             return await _context.Users
                 .Include(u => u.Profile)
                 .Where(u => u.Role == "Doctor")

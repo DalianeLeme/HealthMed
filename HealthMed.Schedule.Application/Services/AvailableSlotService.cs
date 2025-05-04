@@ -1,5 +1,4 @@
-﻿// Schedule.Application/Services/AvailableSlotService.cs
-using HealthMed.Schedule.Application.Interfaces;
+﻿using HealthMed.Schedule.Application.Interfaces;
 using HealthMed.Schedule.Domain.Entities;
 using HealthMed.Schedule.Domain.Interfaces;
 using HealthMed.Shared.Events;
@@ -33,7 +32,6 @@ namespace HealthMed.Schedule.Application.Services
 
             await _repository.AddAsync(slot);
 
-            // publica evento de criação de slot
             _publisher.Publish(
                 nameof(SlotCreated),
                 new SlotCreated(slot.Id, slot.DoctorId, slot.StartTime, slot.EndTime)
@@ -49,10 +47,8 @@ namespace HealthMed.Schedule.Application.Services
 
             await _repository.DeleteAsync(slot);
 
-            // Cria só uma vez:
             var evt = new SlotDeleted(slot.Id, slot.DoctorId);
 
-            // Publica usando a variável:
             _publisher.Publish(
                 nameof(SlotDeleted),
                 new SlotDeleted(slot.Id, slot.DoctorId)
@@ -65,28 +61,23 @@ namespace HealthMed.Schedule.Application.Services
             if (slot is null)
                 return false;
 
-            // Chama o DeleteAsync da própria classe: remove + publica evento
             await DeleteAsync(slot.Id);
             return true;
         }
 
         public async Task<bool> UpdateAsync(AvailableSlot slot)
         {
-            // 1) busca o existente
             var existing = await _repository.GetByIdAsync(slot.Id);
             if (existing is null)
                 return false;
 
-            // 2) atualiza no banco
             await _repository.UpdateAsync(slot);
 
-            // 3) publica delete do horário antigo
             _publisher.Publish(
                 nameof(SlotDeleted),
                 new SlotDeleted(existing.Id, existing.DoctorId)
             );
 
-            // 4) publica criação com o novo intervalo
             _publisher.Publish(
                 nameof(SlotCreated),
                 new SlotCreated(slot.Id, slot.DoctorId, slot.StartTime, slot.EndTime)
@@ -94,8 +85,8 @@ namespace HealthMed.Schedule.Application.Services
 
             return true;
         }
+
         public Task<AvailableSlot?> GetByIdAsync(Guid id)
             => _repository.GetByIdAsync(id);
     }
 }
-

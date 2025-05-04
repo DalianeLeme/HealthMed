@@ -2,6 +2,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
 EXPOSE 8080
 
+COPY wait-for-it.sh .
+RUN chmod +x wait-for-it.sh
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
@@ -30,4 +33,6 @@ RUN dotnet publish "HealthMed.Schedule.API.csproj" -c Release -o /app/publish /p
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "HealthMed.Schedule.API.dll"]
+COPY --from=base /app/wait-for-it.sh .
+
+ENTRYPOINT ["bash", "-c", "./wait-for-it.sh rabbitmq:5672 -- ./wait-for-it.sh sqlserver:1433 -- dotnet HealthMed.Schedule.API.dll"]

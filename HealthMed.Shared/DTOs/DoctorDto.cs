@@ -1,5 +1,4 @@
-﻿// HealthMed.Shared.DTOs/DoctorDto.cs
-namespace HealthMed.Shared.DTOs
+﻿namespace HealthMed.Shared.DTOs
 {
     public class DoctorDto
     {

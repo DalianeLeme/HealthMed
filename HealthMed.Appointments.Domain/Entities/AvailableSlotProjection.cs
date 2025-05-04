@@ -7,7 +7,6 @@
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
 
-
         public AvailableSlotProjection(Guid id, Guid doctorId, DateTime start, DateTime end)
         {
             Id = id;
@@ -15,7 +14,6 @@
             StartTime = start;
             EndTime = end;
         }
-
         public AvailableSlotProjection() { }
     }
 }

@@ -40,7 +40,6 @@ namespace HealthMed.Auth.API.Controllers
             return Ok("Usuário registrado com sucesso.");
         }
 
-
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -60,14 +59,12 @@ namespace HealthMed.Auth.API.Controllers
                     user.Email,
                     user.Role,
                     user.CPF,
-                    // se for médico, pega do profile:
                     CRM = user.Profile?.CRM,
                     Specialty = user.Profile?.Specialty,
                     ConsultationFee = user.Profile?.ConsultationValor
                 }
             });
         }
-
 
         [Authorize(Roles = "Patient")]
         [HttpGet("doctors")]
@@ -78,6 +75,5 @@ namespace HealthMed.Auth.API.Controllers
             var doctors = await authService.GetAllDoctorsAsync(specialty);
             return Ok(doctors);
         }
-
     }
 }

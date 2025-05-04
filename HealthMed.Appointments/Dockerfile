@@ -2,6 +2,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
 EXPOSE 8080
 
+# Adiciona o script wait-for-it.sh ao container base
+COPY wait-for-it.sh .
+RUN chmod +x wait-for-it.sh
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
@@ -20,7 +24,7 @@ COPY ["HealthMed.Schedule.Application/HealthMed.Schedule.Application.csproj", "H
 WORKDIR "/src/HealthMed.Appointments"
 RUN dotnet restore "HealthMed.Appointments.API.csproj"
 
-# Copia o restante dos arquivos necessários
+# Copia os demais arquivos
 COPY HealthMed.Appointments/. ./HealthMed.Appointments/
 COPY HealthMed.Appointments.Application/. ./HealthMed.Appointments.Application/
 COPY HealthMed.Appointments.Domain/. ./HealthMed.Appointments.Domain/
@@ -30,7 +34,6 @@ COPY HealthMed.Schedule.Domain/. ./HealthMed.Schedule.Domain/
 COPY HealthMed.Shared/. ./HealthMed.Shared/
 COPY HealthMed.Schedule.Application/. ./HealthMed.Schedule.Application/
 
-WORKDIR "/src/HealthMed.Appointments"
 RUN dotnet build "HealthMed.Appointments.API.csproj" -c Release -o /app/build /p:UseAppHost=false
 
 FROM build AS publish
@@ -39,4 +42,6 @@ RUN dotnet publish "HealthMed.Appointments.API.csproj" -c Release -o /app/publis
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "HealthMed.Appointments.API.dll"]
+COPY --from=base /app/wait-for-it.sh .
+
+ENTRYPOINT ["bash", "-c", "./wait-for-it.sh rabbitmq:5672 -- ./wait-for-it.sh sqlserver:1433 -- dotnet HealthMed.Appointments.API.dll"]

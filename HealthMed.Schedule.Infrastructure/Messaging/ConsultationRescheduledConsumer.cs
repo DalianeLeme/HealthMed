@@ -22,7 +22,6 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
             _scf = scf;
             _ch = conn.CreateModel();
 
-            // 1) garante exchange + fila
             _ch.ExchangeDeclare(Exchange, ExchangeType.Fanout, durable: true, autoDelete: false);
             _ch.QueueDeclare(Queue, durable: true, exclusive: false, autoDelete: false, arguments: null);
             _ch.QueueBind(Queue, Exchange, routingKey: "");
@@ -41,7 +40,6 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
                     using var scope = _scf.CreateScope();
                     var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
 
-                    // Remove o antigo e adiciona o novo
                     await svc.RemoveSlotByTimeAsync(evt.DoctorId, evt.OldTime);
                     await svc.AddAsync(new HealthMed.Schedule.Domain.Entities.AvailableSlot
                     {

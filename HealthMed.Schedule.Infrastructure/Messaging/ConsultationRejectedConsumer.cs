@@ -1,5 +1,4 @@
-﻿// ConsultationRejectedConsumer.cs
-using HealthMed.Schedule.Application.Interfaces;
+﻿using HealthMed.Schedule.Application.Interfaces;
 using HealthMed.Schedule.Domain.Entities;
 using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +21,6 @@ public class ConsultationRejectedConsumer : BackgroundService
         _scf = scf;
         _ch = conn.CreateModel();
 
-        // 1) declara exchange/fila
         _ch.ExchangeDeclare(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true, autoDelete: false);
         _ch.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
         _ch.QueueBind(queue: QueueName, exchange: ExchangeName, routingKey: "");
@@ -42,9 +40,8 @@ public class ConsultationRejectedConsumer : BackgroundService
                 using var scope = _scf.CreateScope();
                 var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
 
-                // ■ no caso de REJECTED, devolvemos o horário à agenda:
                 var slot = new AvailableSlot(
-                    Guid.NewGuid(),          // novo Id para o slot
+                    Guid.NewGuid(),          
                     evt.DoctorId,
                     evt.ScheduledTime,
                     evt.ScheduledTime.AddMinutes(30)

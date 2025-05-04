@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appointments-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: appointments-api
+  template:
+    metadata:
+      labels:
+        app: appointments-api
+    spec:
+      initContainers:
+      - name: wait-for-sql
+        image: busybox
+        command: ['sh', '-c', 'until nc -z sqlserver 1433; do echo waiting for sqlserver; sleep 2; done;']
+      containers:
+      - name: appointments-api
+        image: dalileme/appointments-api:latest
+        ports:
+        - containerPort: 80
+        envFrom:
+        - configMapRef:
+            name: appointments-api-config
+      imagePullSecrets:
+      - name: myregistrykey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: appointments-api
+spec:
+  selector:
+    app: appointments-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: NodePort

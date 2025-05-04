@@ -8,7 +8,7 @@
 
         public string? CPF { get; set; }
 
-        // só para médicos:
+
         public string? CRM { get; set; }
         public string? Specialty { get; set; }
         public decimal? ConsultationValor { get; set; }

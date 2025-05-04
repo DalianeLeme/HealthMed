@@ -5,12 +5,9 @@ namespace HealthMed.Appointments.Infrastructure.Data
 {
     public class AppointmentsDbContext : DbContext
     {
-        public AppointmentsDbContext(DbContextOptions<AppointmentsDbContext> options)
-            : base(options) { }
+        public AppointmentsDbContext(DbContextOptions<AppointmentsDbContext> options) : base(options) { }
 
         public DbSet<Appointment> Appointments { get; set; }
-
-        // renomeei de AvailableSlots para AvailableSlotProjections
         public DbSet<AvailableSlotProjection> AvailableSlotProjections { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,7 +36,6 @@ namespace HealthMed.Appointments.Infrastructure.Data
             modelBuilder.Entity<Appointment>()
                 .Property(a => a.Status)
                 .HasConversion<string>();
-
 
             base.OnModelCreating(modelBuilder);
         }

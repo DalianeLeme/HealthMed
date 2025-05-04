@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dotnet-cli
+spec:
+  containers:
+  - name: dotnet-cli
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - mountPath: /src
+      name: source-code
+  volumes:
+  - name: source-code
+    emptyDir: {}

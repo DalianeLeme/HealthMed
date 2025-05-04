@@ -1,13 +1,10 @@
-﻿using System;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using HealthMed.Schedule.Application.Interfaces;
+﻿using HealthMed.Schedule.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System.Text;
+using System.Text.Json;
 
 namespace HealthMed.Schedule.Infrastructure.Messaging
 {
@@ -23,7 +20,6 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
             _scopeFactory = scopeFactory;
             _channel = connection.CreateModel();
 
-            // 1) declara fila RPC como durável
             _channel.QueueDeclare(
                 queue: QueueName,
                 durable: true,
@@ -32,7 +28,6 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
                 arguments: null
             );
 
-            // 2) QoS para 1 mensagem por vez
             _channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
         }
 
@@ -53,12 +48,10 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
                      && !string.IsNullOrEmpty(corrId)
                      && Guid.TryParse(idStr, out var doctorId))
                     {
-                        // 3) obtém os slots dentro de um escopo
                         using var scope = _scopeFactory.CreateScope();
                         var svc = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
                         var slots = await svc.GetByDoctorAsync(doctorId);
 
-                        // 4) serializa e envia resposta
                         var respBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(slots));
                         var replyProps = _channel.CreateBasicProperties();
                         replyProps.CorrelationId = corrId;
@@ -74,11 +67,9 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine($"[Schedule] erro ao processar RPC de agenda: {ex}");
-                    // não reenfileirar, afinal é RPC
                 }
                 finally
                 {
-                    // 5) ack sempre
                     _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
                 }
             };

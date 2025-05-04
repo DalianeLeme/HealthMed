@@ -1,7 +1,9 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using HealthMed.Appointments.Application.Clients;
 using HealthMed.Appointments.Application.Interfaces;
 using HealthMed.Appointments.Application.Services;
-using HealthMed.Appointments.Domain.Enums;               // para AppointmentStatus
+using HealthMed.Appointments.Domain.Enums;
 using HealthMed.Appointments.Domain.Interfaces;
 using HealthMed.Appointments.Infrastructure.Data;
 using HealthMed.Appointments.Infrastructure.Handlers;
@@ -11,26 +13,22 @@ using HealthMed.Shared.Messaging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Any;                            // para OpenApiString
+using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using RabbitMQ.Client;
-using System;
-using System.Linq;
+using System.Data.SqlClient;
 using System.Text;
-using System.Text.Json.Serialization;                   // JsonStringEnumConverter
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
-// 1) Porta
 builder.WebHost.UseUrls("http://0.0.0.0:80");
 
-// 2) EF Core
 builder.Services.AddDbContext<AppointmentsDbContext>(opt =>
     opt.UseSqlServer(cfg.GetConnectionString("DefaultConnection"))
 );
 
-// 3) Conexão RabbitMQ
 builder.Services.AddSingleton<IConnection>(sp => {
     var cfg = sp.GetRequiredService<IConfiguration>();
     var factory = new ConnectionFactory
@@ -43,19 +41,15 @@ builder.Services.AddSingleton<IConnection>(sp => {
     return factory.CreateConnection();
 });
 
-// 4) Repositórios e serviços
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAvailableSlotProjectionRepository, AvailableSlotProjectionRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-// 5) Publisher — agora recebe IConnection e cria seu próprio canal
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 
-// 6) HostedServices (consumidores de eventos para popular projeções)
 builder.Services.AddHostedService<SlotCreatedConsumer>();
 builder.Services.AddHostedService<SlotDeletedConsumer>();
 
-// 7) HTTP + Auth
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<AuthTokenHandler>();
 builder.Services.AddHttpClient<AuthClient>(client =>
@@ -64,19 +58,23 @@ builder.Services.AddHttpClient<AuthClient>(client =>
 })
 .AddHttpMessageHandler<AuthTokenHandler>();
 
-// 8) Controllers + JSON enum as string
-builder.Services.AddControllers()
+builder.Services
+    .AddControllers()
     .AddJsonOptions(opts =>
         opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter())
     );
 
-// 9) Swagger + JWT + enum doc
+builder.Services.AddValidatorsFromAssemblyContaining<ScheduleRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<CancelAppointmentRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<RescheduleRequestValidator>();
+
+builder.Services.AddFluentValidationAutoValidation();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Appointments.API", Version = "v1" });
 
-    // security
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -98,7 +96,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // documenta AppointmentStatus como string e lista de valores
     c.MapType<AppointmentStatus>(() =>
         new OpenApiSchema
         {
@@ -128,7 +125,28 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Pipeline
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppointmentsDbContext>();
+
+    try
+    {
+        if (db.Database.GetPendingMigrations().Any())
+        {
+            Console.WriteLine("Aplicando migrations pendentes (AppointmentsDbContext)...");
+            db.Database.Migrate();
+        }
+    }
+    catch (SqlException ex) when (ex.Number == 1801)
+    {
+        Console.WriteLine("Banco de dados já existe (AppointmentsDbContext).");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Erro ao aplicar migrations no AppointmentsDbContext: {ex.Message}");
+    }
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseHttpsRedirection();

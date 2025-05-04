@@ -1,5 +1,4 @@
-﻿// Schedule.API/Infrastructure/Messaging/ConsultationCreatedConsumer.cs
-using HealthMed.Shared.Events;
+﻿using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
@@ -12,7 +11,7 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
 {
     public class ConsultationCreatedConsumer : BackgroundService
     {
-        private const string Exchange = nameof(ConsultationCreated);  // "ConsultationCreated"
+        private const string Exchange = nameof(ConsultationCreated);
         private const string Queue = "schedule.consultation.created";
 
         private readonly IModel _ch;
@@ -22,7 +21,6 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
         {
             _scf = scf;
             _ch = conn.CreateModel();
-
             _ch.ExchangeDeclare(Exchange, ExchangeType.Fanout, durable: true, autoDelete: false, arguments: null);
             _ch.QueueDeclare(Queue, durable: true, exclusive: false, autoDelete: false, arguments: null);
             _ch.QueueBind(Queue, Exchange, routingKey: "");

@@ -42,17 +42,15 @@ namespace HealthMed.Schedule.Infrastructure.Messaging
                     using var scope = _scopeFactory.CreateScope();
                     var service = scope.ServiceProvider.GetRequiredService<IAvailableSlotService>();
 
-                    // usa o mesmo Id e o mesmo EndTime do slot original
-                    // em vez de evt.EndTime use:
+
                     var endTime = evt.ScheduledTime.AddMinutes(30);
 
                     var slot = new AvailableSlot(
-                        Guid.NewGuid(),          // ou evt.SlotId, se você passar o SlotId no evento
+                        Guid.NewGuid(),          
                         evt.DoctorId,
                         evt.ScheduledTime,
-                        evt.EndTime              // usa o EndTime vindo do evento
+                        evt.EndTime              
                     );
-
 
                     await service.AddAsync(slot);
 

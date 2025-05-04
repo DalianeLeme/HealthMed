@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schedule-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schedule-api
+  template:
+    metadata:
+      labels:
+        app: schedule-api
+    spec:
+      initContainers:
+      - name: wait-for-sql
+        image: busybox
+        command: ['sh', '-c', 'until nc -z sqlserver 1433; do echo waiting for sqlserver; sleep 2; done;']
+      - name: wait-for-rabbitmq
+        image: busybox
+        command: ['sh', '-c', 'until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done;']
+      containers:
+      - name: schedule-api
+        image: dalileme/schedule-api:latest
+        ports:
+        - containerPort: 80
+        envFrom:
+        - configMapRef:
+            name: schedule-api-config
+      imagePullSecrets:
+      - name: myregistrykey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schedule-api
+spec:
+  selector:
+    app: schedule-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: NodePort

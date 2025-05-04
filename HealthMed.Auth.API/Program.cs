@@ -1,3 +1,5 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using HealthMed.Auth.Application.Services;
 using HealthMed.Auth.Domain.Interfaces;
 using HealthMed.Auth.Infrastructure.Data;
@@ -13,7 +15,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.UseUrls("http://0.0.0.0:80");
 
-// Configurar banco de dados
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -25,7 +26,13 @@ builder.Services
     .AddJsonOptions(opts =>
         opts.JsonSerializerOptions
             .Converters
-            .Add(new JsonStringEnumConverter()));
+            .Add(new JsonStringEnumConverter())
+    );
+
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
+
+builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -51,7 +58,6 @@ builder.Services.AddSwaggerGen(options =>
     }});
 });
 
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -62,7 +68,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
             )
         };
     });
@@ -75,7 +81,25 @@ builder.Services.AddScoped<JwtService>();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment() || true) 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+
+    try
+    {
+        if (db.Database.GetPendingMigrations().Any())
+        {
+            db.Database.Migrate();
+            Console.WriteLine("Migrations aplicadas com sucesso.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Erro ao aplicar migrations: {ex.Message}");
+    }
+}
+
+if (app.Environment.IsDevelopment() || true)
 {
     app.UseSwagger();
     app.UseSwaggerUI();

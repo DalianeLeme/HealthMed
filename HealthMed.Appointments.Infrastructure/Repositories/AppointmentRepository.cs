@@ -1,8 +1,7 @@
 ﻿using HealthMed.Appointments.Domain.Entities;
+using HealthMed.Appointments.Domain.Enums;
 using HealthMed.Appointments.Domain.Interfaces;
 using HealthMed.Appointments.Infrastructure.Data;
-using HealthMed.Auth.Domain;
-using HealthMed.Auth.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace HealthMed.Appointments.Infrastructure.Repositories
@@ -48,11 +47,13 @@ namespace HealthMed.Appointments.Infrastructure.Repositories
         }
 
         public Task<bool> ExistsByDoctorAndTimeAsync(Guid doctorId, DateTime scheduledTime)
-            => _context.Appointments
-                  .AsNoTracking()
-                  .AnyAsync(a =>
-                      a.DoctorId == doctorId &&
-                      a.ScheduledTime == scheduledTime
-                  );
+         => _context.Appointments
+         .AsNoTracking()
+         .AnyAsync(a =>
+             a.DoctorId == doctorId
+             && a.ScheduledTime == scheduledTime
+             && (a.Status == AppointmentStatus.Pending
+                 || a.Status == AppointmentStatus.Accepted)
+         );
     }
 }

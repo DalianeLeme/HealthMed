@@ -1,5 +1,4 @@
-﻿// HealthMed.Appointments.Infrastructure/Repositories/AvailableSlotProjectionRepository.cs
-using HealthMed.Appointments.Domain.Entities;
+﻿using HealthMed.Appointments.Domain.Entities;
 using HealthMed.Appointments.Domain.Interfaces;
 using HealthMed.Appointments.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

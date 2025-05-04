@@ -51,5 +51,4 @@ public class AvailableSlotRepository : IAvailableSlotRepository
     }
     public async Task<bool> ExistsByIdAsync(Guid slotId)
        => await _context.AvailableSlots.AnyAsync(s => s.Id == slotId);
-
 }

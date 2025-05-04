@@ -74,7 +74,15 @@ public class AvailableSlotController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         var doctorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (doctorId == null) return Unauthorized();
+        if (doctorId == null)
+            return Unauthorized();
+
+        var slot = await _service.GetByIdAsync(id);
+        if (slot == null)
+            throw new KeyNotFoundException($"Horário {id} não encontrado.");
+
+        if (slot.DoctorId != Guid.Parse(doctorId))
+            return Forbid("Você só pode remover seus próprios horários.");
 
         await _service.DeleteAsync(id);
         return Ok("Horário removido.");

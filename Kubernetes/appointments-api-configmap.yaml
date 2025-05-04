@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: appointments-api-config
+data:
+  ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=HealthMedDb;User Id=sa;Password=NovaSenhaForte123;TrustServerCertificate=True"
+  RabbitMQ__Host: rabbitmq
+  RabbitMQ__Port: "5672"
+  RabbitMQ__Username: guest
+  RabbitMQ__Password: guest
+  AuthApi__BaseUrl: "http://auth-api:80"
+  ScheduleApi__BaseUrl: "http://schedule-api:80"

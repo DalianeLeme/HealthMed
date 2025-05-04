@@ -1,15 +1,10 @@
-﻿// ConsultationAcceptedConsumer.cs
-using HealthMed.Shared.Events;
-using HealthMed.Schedule.Application.Interfaces;
+﻿using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 public class ConsultationAcceptedConsumer : BackgroundService
 {
@@ -23,8 +18,6 @@ public class ConsultationAcceptedConsumer : BackgroundService
     {
         _scf = scf;
         _ch = conn.CreateModel();
-
-        // 1) declara exchange/fila
         _ch.ExchangeDeclare(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true, autoDelete: false);
         _ch.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
         _ch.QueueBind(queue: QueueName, exchange: ExchangeName, routingKey: "");
@@ -41,14 +34,11 @@ public class ConsultationAcceptedConsumer : BackgroundService
                 var evt = JsonSerializer.Deserialize<ConsultationAccepted>(json)
                            ?? throw new InvalidOperationException("Payload vazio em ConsultationAccepted");
 
-                // ■ no caso de ACCEPTED, o slot já foi removido lá no ConsultationCreated, 
-                //   aqui só confirmamos que ficará ocupado: 
                 Console.WriteLine(
                     $"[Schedule] Consulta aceita: " +
                     $"ConsultationId={evt.ConsultationId}, DoctorId={evt.DoctorId}, PatientId={evt.PatientId}, Time={evt.ScheduledTime:O}"
                 );
 
-                // ack
                 _ch.BasicAck(ea.DeliveryTag, multiple: false);
             }
             catch (Exception ex)

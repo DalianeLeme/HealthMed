@@ -1,5 +1,4 @@
-﻿// Appointments.API/Infrastructure/Messaging/SlotCreatedConsumer.cs
-using HealthMed.Shared.Events;
+﻿using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
@@ -11,7 +10,7 @@ using HealthMed.Appointments.Domain.Entities;
 
 public class SlotCreatedConsumer : BackgroundService
 {
-    private const string ExchangeName = nameof(SlotCreated); // "SlotCreated"
+    private const string ExchangeName = nameof(SlotCreated);
     private const string QueueName = "appointments.slot.created";
 
     private readonly IConnection _connection;

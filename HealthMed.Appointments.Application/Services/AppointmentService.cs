@@ -1,5 +1,4 @@
-﻿// HealthMed.Appointments.Application/Services/AppointmentService.cs
-using HealthMed.Appointments.Application.Interfaces;
+﻿using HealthMed.Appointments.Application.Interfaces;
 using HealthMed.Appointments.Domain.Entities;
 using HealthMed.Appointments.Domain.Enums;
 using HealthMed.Appointments.Domain.Interfaces;
@@ -14,7 +13,6 @@ namespace HealthMed.Appointments.Application.Services
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IAvailableSlotProjectionRepository _slotRepo;
         private readonly IEventPublisher _publisher;
-
         public AppointmentService(
             IAppointmentRepository appointmentRepository,
             IAvailableSlotProjectionRepository slotRepo,
@@ -24,7 +22,6 @@ namespace HealthMed.Appointments.Application.Services
             _slotRepo = slotRepo;
             _publisher = publisher;
         }
-
         public async Task<bool> ScheduleAppointmentAsync(Guid slotId, Guid patientId)
         {
             var slot = await _slotRepo.GetByIdAsync(slotId);
@@ -70,7 +67,6 @@ namespace HealthMed.Appointments.Application.Services
             if (appt.DoctorId != doctorId)
                 return UpdateStatusResult.Forbidden;
 
-                // só permite transição se o status atual for Pending
                  if (appt.Status != AppointmentStatus.Pending)
                         return UpdateStatusResult.Forbidden;
 
@@ -91,7 +87,6 @@ namespace HealthMed.Appointments.Application.Services
             }
             else if (newStatus == AppointmentStatus.Rejected)
             {
-                // recupera o slot projetado para saber o EndTime real
                 var slot = await _slotRepo.GetByIdAsync(appt.SlotId);
                 var endTime = slot?.EndTime ?? appt.ScheduledTime;
 
@@ -110,7 +105,6 @@ namespace HealthMed.Appointments.Application.Services
             return UpdateStatusResult.Success;
         }
 
-
         public async Task<List<AppointmentSlot>> GetAvailableSlotsAsync(Guid doctorId)
             => await _slotRepo.GetByDoctorAsync(doctorId);
 
@@ -122,24 +116,20 @@ namespace HealthMed.Appointments.Application.Services
 
         public async Task<bool> CancelAppointmentAsync(Guid appointmentId, Guid patientId, string justification)
         {
-            // 1) Busca e valida
             var appt = await _appointmentRepository.FindByIdAsync(appointmentId);
             if (appt is null || appt.PatientId != patientId)
                 return false;
 
-            // 2) Não permite cancelar de novo nem se já foi recusada
             if (appt.Status == AppointmentStatus.Cancelled
              || appt.Status == AppointmentStatus.Rejected)
             {
                 return false;
             }
 
-            // 3) Atualiza status para Cancelled
             appt.Status = AppointmentStatus.Cancelled;
             appt.CancellationReason = justification;
             await _appointmentRepository.UpdateAppointment(appt);
 
-            // 4) Publica evento para devolver o slot
             _publisher.Publish(
                 nameof(ConsultationCancelled),
                 new ConsultationCancelled(
@@ -159,27 +149,22 @@ namespace HealthMed.Appointments.Application.Services
             Guid newSlotId,
             Guid patientId)
         {
-            // 1) Busca a consulta
             var appt = await _appointmentRepository.FindByIdAsync(appointmentId);
             if (appt is null
              || appt.PatientId != patientId
-             // só não pode reagendar se estiver Rejected ou Cancelled
              || appt.Status == AppointmentStatus.Rejected
              || appt.Status == AppointmentStatus.Cancelled)
             {
                 return false;
             }
 
-            // 2) Dados do slot antigo
             var oldStart = appt.ScheduledTime;
             var oldEnd = appt.EndTime;
 
-            // 3) Verifica novo slot
             var newSlot = await _slotRepo.GetByIdAsync(newSlotId);
             if (newSlot is null)
                 return false;
 
-            // 4) Libera antigo
             _publisher.Publish(
                 nameof(ConsultationCancelled),
                 new ConsultationCancelled(
@@ -191,7 +176,6 @@ namespace HealthMed.Appointments.Application.Services
                 )
             );
 
-            // 5) Reserva novo
             _publisher.Publish(
                 nameof(ConsultationCreated),
                 new ConsultationCreated(
@@ -202,11 +186,10 @@ namespace HealthMed.Appointments.Application.Services
                 )
             );
 
-            // 6) Atualiza entidade
             appt.SlotId = newSlot.Id;
             appt.ScheduledTime = newSlot.StartTime;
             appt.EndTime = newSlot.EndTime;
-            appt.Status = AppointmentStatus.Pending; // volta a Pending para reaceitação
+            appt.Status = AppointmentStatus.Pending;
             await _appointmentRepository.UpdateAppointment(appt);
 
             return true;

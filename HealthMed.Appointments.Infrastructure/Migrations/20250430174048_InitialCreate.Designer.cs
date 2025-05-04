@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HealthMed.Appointments.Infrastructure.Migrations
 {
     [DbContext(typeof(AppointmentsDbContext))]
-    [Migration("20250410233239_InitialCreate")]
+    [Migration("20250430174048_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -31,14 +31,24 @@ namespace HealthMed.Appointments.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<Guid>("DoctorId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid>("PatientId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("ScheduledTime")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SlotId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -47,9 +57,30 @@ namespace HealthMed.Appointments.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DoctorId", "ScheduledTime")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[Status] IN ('Pending','Accepted')");
 
                     b.ToTable("Appointments");
+                });
+
+            modelBuilder.Entity("HealthMed.Appointments.Domain.Entities.AvailableSlotProjection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AvailableSlotProjections", (string)null);
                 });
 #pragma warning restore 612, 618
         }

@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-api
+  template:
+    metadata:
+      labels:
+        app: auth-api
+    spec:
+      initContainers:
+      - name: wait-for-sql
+        image: busybox
+        command: ['sh', '-c', 'until nc -z sqlserver 1433; do echo waiting for sqlserver; sleep 2; done;']
+      containers:
+      - name: auth-api
+        image: dalileme/auth-api:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=sqlserver,1433;Database=HealthMedDb;User Id=sa;Password=NovaSenhaForte123;TrustServerCertificate=True;"
+      imagePullSecrets:
+      - name: myregistrykey
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-api
+spec:
+  selector:
+    app: auth-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: NodePort

@@ -5,8 +5,7 @@ namespace HealthMed.Auth.Infrastructure.Data
 {
     public class AuthDbContext : DbContext
     {
-        public AuthDbContext(DbContextOptions<AuthDbContext> options)
-            : base(options) { }
+        public AuthDbContext(DbContextOptions<AuthDbContext> options) : base(options) { }
 
         public DbSet<User> Users { get; set; }
         public DbSet<DoctorProfile> DoctorProfiles { get; set; }
@@ -28,7 +27,6 @@ namespace HealthMed.Auth.Infrastructure.Data
                  .IsRequired()
                  .HasMaxLength(200);
 
-                // relação 1:1 com DoctorProfile
                 b.HasOne(u => u.Profile)
                  .WithOne(p => p.User)
                  .HasForeignKey<DoctorProfile>(p => p.UserId);
@@ -40,7 +38,6 @@ namespace HealthMed.Auth.Infrastructure.Data
 
                 b.HasKey(p => p.UserId);
 
-                // CRM mapeado aqui, obrigatório para médicos
                 b.Property(p => p.CRM)
                  .IsRequired()
                  .HasMaxLength(20);

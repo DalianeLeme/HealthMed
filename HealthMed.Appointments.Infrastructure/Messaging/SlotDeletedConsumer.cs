@@ -1,5 +1,4 @@
-﻿// Appointments.API/Infrastructure/Messaging/SlotDeletedConsumer.cs
-using HealthMed.Shared.Events;
+﻿using HealthMed.Shared.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
@@ -10,8 +9,8 @@ using HealthMed.Appointments.Domain.Interfaces;
 
 public class SlotDeletedConsumer : BackgroundService
 {
-    private const string ExchangeName = nameof(SlotDeleted);           // "SlotDeleted"
-    private const string QueueName = "appointments.slot.deleted";  // sua fila
+    private const string ExchangeName = nameof(SlotDeleted);          
+    private const string QueueName = "appointments.slot.deleted";
 
     private readonly IModel _ch;
     private readonly IServiceScopeFactory _scf;
@@ -20,13 +19,9 @@ public class SlotDeletedConsumer : BackgroundService
     {
         _scf = scf;
         _ch = conn.CreateModel();
-
-        // declara o exchange + fila + bind
         _ch.ExchangeDeclare(ExchangeName, ExchangeType.Fanout, durable: true, autoDelete: false);
         _ch.QueueDeclare(QueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
         _ch.QueueBind(QueueName, ExchangeName, routingKey: "");
-
-        // opcional: prefetch=1
         _ch.BasicQos(0, 1, false);
     }
 

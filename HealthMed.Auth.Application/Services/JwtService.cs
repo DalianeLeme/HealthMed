@@ -1,5 +1,4 @@
-﻿using HealthMed.Appointments.Domain.Entities;
-using HealthMed.Auth.Domain.Entities;
+﻿using HealthMed.Auth.Domain.Entities;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;

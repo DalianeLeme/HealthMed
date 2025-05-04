@@ -10,13 +10,11 @@ public class MessagePublisher : IDisposable
 
     public MessagePublisher(IConnection connection)
     {
-        // cada publisher escolhe criar um canal próprio
         _channel = connection.CreateModel();
     }
 
     public void Publish<T>(string queueName, T message)
     {
-        // garante que a fila exista
         _channel.QueueDeclare(queue: queueName,
                               durable: false,
                               exclusive: false,
@@ -37,4 +35,3 @@ public class MessagePublisher : IDisposable
 
     public void Dispose() => _channel?.Dispose();
 }
-

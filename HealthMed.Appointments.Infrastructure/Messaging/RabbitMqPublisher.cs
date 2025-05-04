@@ -1,6 +1,5 @@
 ﻿using HealthMed.Shared.Messaging;
 using RabbitMQ.Client;
-using System;
 using System.Text.Json;
 
 namespace HealthMed.Appointments.Infrastructure.Messaging
@@ -15,7 +14,6 @@ namespace HealthMed.Appointments.Infrastructure.Messaging
 
         public void Publish<T>(string exchangeName, T @event)
         {
-            // 1) declara/faz idempotente o exchange fanout
             _ch.ExchangeDeclare(
                 exchange: exchangeName,
                 type: ExchangeType.Fanout,
@@ -23,7 +21,6 @@ namespace HealthMed.Appointments.Infrastructure.Messaging
                 autoDelete: false,
                 arguments: null);
 
-            // 2) serializa e publica
             var body = JsonSerializer.SerializeToUtf8Bytes(@event);
             var props = _ch.CreateBasicProperties();
             props.Persistent = true;

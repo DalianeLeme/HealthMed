@@ -14,7 +14,6 @@ namespace HealthMed.Appointments.Application.Clients
         {
             _connection = connection;
         }
-
         public async Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(Guid doctorId)
         {
             using var channel = _connection.CreateModel();
@@ -57,12 +56,10 @@ namespace HealthMed.Appointments.Application.Clients
             }
         }
 
-        // <<< ADICIONE ESTE MÉTODO
         public async Task<bool> IsSlotAvailable(Guid doctorId, DateTime startTime)
         {
             var slots = await GetAvailableSlotsAsync(doctorId);
             return slots.Any(s => s.StartTime == startTime);
         }
-        // >>> FIM
     }
 }

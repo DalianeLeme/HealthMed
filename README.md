@@ -29,8 +29,8 @@ Sistema para startup Health&Med, proporcionando a possibilidadce de agendamendo 
 :small_red_triangle_down: Aumenta ou reduz o número de pods confome uso de CPU/Memória. </br>
 
 - `Segurança`:  </br>
-:small_red_triangle_down: Autenticação com JWT, garantindo acesso seguro e com controle por perfil (médico/paciente). </br>
-:small_red_triangle_down: Criptografia de dados sensíveis. </br>
+:small_blue_diamond: Autenticação com JWT, garantindo acesso seguro e com controle por perfil (médico/paciente). </br>
+:small_blue_diamond: Criptografia de dados sensíveis. </br>
 
 # Diagrama requisitos funcionais
 
